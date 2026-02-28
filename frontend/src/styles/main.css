@@ -783,6 +783,75 @@ html, body {
 .btn-secondary:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
 
 /* ========================================
+   ミュートボタン
+   ======================================== */
+.mute-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.mute-btn:hover { border-color: var(--accent-primary); transform: scale(1.1); }
+
+/* ========================================
+   背景アニメーションレイヤー
+   ======================================== */
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+#app-inner { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+.bg-fish {
+  position: absolute;
+  user-select: none;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+}
+.bg-fish-left {
+  right: -5%;
+  animation-name: bgFishLeft;
+}
+.bg-fish-right {
+  left: -5%;
+  animation-name: bgFishRight;
+  transform: scaleX(-1);
+}
+@keyframes bgFishLeft {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-110vw); }
+}
+@keyframes bgFishRight {
+  0%   { transform: scaleX(-1) translateX(0); }
+  100% { transform: scaleX(-1) translateX(-110vw); }
+}
+
+.bg-bubble {
+  position: absolute;
+  bottom: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(0,180,216,0.4), rgba(0,180,216,0.05));
+  border: 1px solid rgba(0,180,216,0.2);
+  animation-name: bgBubble;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in;
+}
+@keyframes bgBubble {
+  0%   { transform: translateY(0) scale(1); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(-100vh) scale(1.3); opacity: 0; }
+}
+
+/* ========================================
    ユーティリティ
    ======================================== */
 .hidden { display: none !important; }

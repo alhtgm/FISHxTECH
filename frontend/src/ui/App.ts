@@ -3,6 +3,7 @@
 // ========================================
 
 import '../styles/main.css';
+import { audioManager } from '../game/audio';
 import type { GameState, EventOption } from '../game/types';
 import {
   createInitialState, setPhase, startMonth, applyBorrow,
@@ -232,6 +233,9 @@ export class App {
     });
     startBtn?.addEventListener('click', () => {
       if (!this.state.companyName.trim()) return;
+      audioManager.resume();
+      audioManager.startBGM();
+      audioManager.playSE('decision');
       this.setState(s => startMonth({ ...s, phase: 'MONTH_START' }));
     });
   }
@@ -240,8 +244,28 @@ export class App {
   // メインレイアウト
   // ========================================
   private renderMainLayout(): string {
+    // 背景に漂う魚・泡アニメーション
+    const bgFish = ['🐟','🐠','🐡','🦐','🦑','🐙','🦀','🦞'];
+    const fishItems = Array.from({length: 8}, (_, i) => {
+      const emoji = bgFish[i % bgFish.length];
+      const top = 10 + Math.random() * 80;
+      const dur = 18 + Math.random() * 20;
+      const delay = Math.random() * -20;
+      const size = 0.9 + Math.random() * 0.8;
+      const dir = i % 2 === 0 ? 'bg-fish-left' : 'bg-fish-right';
+      return `<div class="bg-fish ${dir}" style="top:${top}%;animation-duration:${dur}s;animation-delay:${delay}s;font-size:${size}rem;opacity:0.07">${emoji}</div>`;
+    }).join('');
+    const bubbles = Array.from({length: 12}, (_, i) => {
+      const left = 5 + Math.random() * 90;
+      const dur = 8 + Math.random() * 12;
+      const delay = Math.random() * -15;
+      const size = 4 + Math.random() * 8;
+      return `<div class="bg-bubble" style="left:${left}%;animation-duration:${dur}s;animation-delay:${delay}s;width:${size}px;height:${size}px"></div>`;
+    }).join('');
+
     return `
     <div id="app-inner">
+      <div class="bg-layer">${fishItems}${bubbles}</div>
       ${this.renderHeader()}
       <div id="main-layout">
         ${this.renderLeftPanel()}
@@ -253,6 +277,11 @@ export class App {
   }
 
   private bindMainLayout() {
+    document.getElementById('mute-btn')?.addEventListener('click', () => {
+      const muted = audioManager.toggleMute();
+      const btn = document.getElementById('mute-btn');
+      if (btn) btn.textContent = muted ? '🔇' : '🔊';
+    });
     this.bindRightPanel();
     this.bindCenterPanel();
   }
@@ -272,6 +301,7 @@ export class App {
       <span class="status-message">${phaseMsg}</span>
       <span class="weather-display">${weatherIcon}</span>
       <span style="font-size:0.85rem;color:var(--accent-gold);font-weight:700">¥${money.toLocaleString()}</span>
+      <button id="mute-btn" class="mute-btn" title="ミュート切替">${audioManager.muted ? '🔇' : '🔊'}</button>
     </div>`;
   }
 
@@ -399,18 +429,21 @@ export class App {
     document.querySelectorAll('[data-area]').forEach(el => {
       el.addEventListener('click', () => {
         const areaId = (el as HTMLElement).dataset.area!;
+        audioManager.playSE('select');
         this.setState(s => ({ ...s, selectedAreaId: areaId }));
       });
     });
     document.querySelectorAll('[data-method]').forEach(el => {
       el.addEventListener('click', () => {
         const methodId = (el as HTMLElement).dataset.method!;
+        audioManager.playSE('select');
         this.setState(s => ({ ...s, selectedMethodId: methodId }));
       });
     });
     document.querySelectorAll('[data-fisher]').forEach(el => {
       el.addEventListener('click', () => {
         const fisherId = (el as HTMLElement).dataset.fisher!;
+        audioManager.playSE('select');
         this.setState(s => ({ ...s, selectedFishermanId: fisherId }));
       });
     });
@@ -484,7 +517,9 @@ export class App {
   }
 
   private bindMonthStart() {
+    audioManager.playSE('monthstart');
     document.getElementById('to-decision-btn')?.addEventListener('click', () => {
+      audioManager.playSE('click');
       this.setState(s => setPhase(s, 'DECISION'));
     });
   }
@@ -601,14 +636,15 @@ export class App {
   }
 
   private bindDecision() {
-    document.getElementById('btn-port')?.addEventListener('click', () => this.setState(s => ({ ...s, isResting: false })));
-    document.getElementById('btn-rest')?.addEventListener('click', () => this.setState(s => ({ ...s, isResting: true, selectedAreaId: null, selectedMethodId: null })));
+    document.getElementById('btn-port')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => ({ ...s, isResting: false })); });
+    document.getElementById('btn-rest')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => ({ ...s, isResting: true, selectedAreaId: null, selectedMethodId: null })); });
     const borrowInput = document.getElementById('borrow-input') as HTMLInputElement;
     borrowInput?.addEventListener('input', () => { this.state = { ...this.state, borrowAmount: parseInt(borrowInput.value) || 0 }; });
     document.getElementById('borrow-btn')?.addEventListener('click', () => {
-      if (this.state.borrowAmount > 0) this.setState(s => applyBorrow(s, s.borrowAmount));
+      if (this.state.borrowAmount > 0) { audioManager.playSE('coin'); this.setState(s => applyBorrow(s, s.borrowAmount)); }
     });
     document.getElementById('operation-start-btn')?.addEventListener('click', () => {
+      audioManager.playSE('decision');
       if (this.state.isResting) {
         this.setState(s => finishMonth(prepareOperation(s)));
       } else {
@@ -693,6 +729,15 @@ export class App {
     const r = this.state.monthResult;
     if (!r || r.isResting) return;
 
+    // 利益/損失SE
+    setTimeout(() => {
+      if (r.profit >= 0) {
+        audioManager.playSE('profit');
+      } else {
+        audioManager.playSE('loss');
+      }
+    }, 300);
+
     // カウントアップ
     setTimeout(() => {
       const revenueEl = document.getElementById('revenue-countup');
@@ -701,12 +746,15 @@ export class App {
 
     // 大利益ならコイン演出
     if (r.profit > 500000) {
-      setTimeout(() => spawnCoins(Math.min(Math.floor(r.profit / 500000), 8)), 600);
+      setTimeout(() => {
+        audioManager.playSE('coin');
+        spawnCoins(Math.min(Math.floor(r.profit / 500000), 8));
+      }, 600);
     }
   }
 
   private bindResult() {
-    document.getElementById('to-news-btn')?.addEventListener('click', () => this.setState(s => setPhase(s, 'NEWS')));
+    document.getElementById('to-news-btn')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => setPhase(s, 'NEWS')); });
   }
 
   // ---- ニュース ----
@@ -728,7 +776,7 @@ export class App {
   }
 
   private bindNews() {
-    document.getElementById('to-growth-btn')?.addEventListener('click', () => this.setState(s => checkGrowth(s)));
+    document.getElementById('to-growth-btn')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => checkGrowth(s)); });
   }
 
   // ---- 成長・解放 ----
@@ -790,13 +838,17 @@ export class App {
     document.querySelectorAll('[data-upgrade]').forEach(btn => {
       btn.addEventListener('click', () => {
         const upgradeId = (btn as HTMLElement).dataset.upgrade!;
+        audioManager.playSE('coin');
         this.setState(s => purchaseUpgrade(s, upgradeId));
       });
     });
     document.getElementById('next-month-btn')?.addEventListener('click', () => {
+      audioManager.playSE('click');
       this.setState(s => {
         const next = proceedToNextMonth(s);
         if (next.phase === 'END') return next;
+        // レベルアップしたらファンファーレ
+        if (next.level > s.level) audioManager.playSE('levelup');
         return startMonth(next);
       });
     });
@@ -938,7 +990,8 @@ export class App {
   // ========================================
   private startRunning() {
     const totalDuration = GAME_CONFIG.RUNNING_DURATION * 1000;
-    this.runningStartTime = Date.now();
+    // イベント後に再開する場合、既に経過した時間分を差し引いてタイマーを継続
+    this.runningStartTime = Date.now() - (this.state.currentDay / 30) * totalDuration;
     this.lastDay = this.state.currentDay;
 
     // 魚ジャンプ定期スポーン
@@ -989,9 +1042,9 @@ export class App {
   private updateCalendarDay(day: number) {
     const calDays = document.querySelectorAll('.calendar-day');
     calDays.forEach((el, idx) => {
-      const d = idx - 1 - 7; // dayLabel行(7) + padding(1) を除く
-      const realDay = d + 1;
-      if (realDay < 1 || realDay > 30) return;
+      // idx=0はpadding、idx=1〜30が1〜30日
+      const realDay = idx;
+      if (realDay === 0 || realDay > 30) return;
       if (realDay === day) {
         el.className = 'calendar-day current';
       } else if (realDay < day) {
@@ -1046,8 +1099,9 @@ export class App {
         </span>`;
         document.body.appendChild(flash);
         setTimeout(() => flash.remove(), 600);
+        audioManager.playSE('decision');
         this.setState(s => resolveEvent(s, option));
-        setTimeout(() => this.startRunning(), 300);
+        // setState が phase='RUNNING' を検知して自動的に startRunning() を呼ぶため、ここでは不要
       });
     });
   }
