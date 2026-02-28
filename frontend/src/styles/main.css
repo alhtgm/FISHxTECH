@@ -1,0 +1,1196 @@
+/* ========================================
+   石川漁業シミュレーション - メインCSS
+   ダークテーマ + 海・漁業の雰囲気
+   ======================================== */
+
+:root {
+  --bg-primary: #0a1628;
+  --bg-secondary: #0d1f3c;
+  --bg-panel: #112240;
+  --bg-card: #1a3a5c;
+  --bg-highlight: #1e4976;
+
+  --accent-primary: #00b4d8;
+  --accent-secondary: #0077b6;
+  --accent-gold: #f4a261;
+  --accent-green: #2ec4b6;
+  --accent-red: #e63946;
+  --accent-yellow: #ffd166;
+
+  --text-primary: #e8f4f8;
+  --text-secondary: #90caf9;
+  --text-muted: #5e8aad;
+  --text-gold: #f4a261;
+
+  --border-color: #1e4060;
+  --border-accent: #00b4d8;
+
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(0, 180, 216, 0.2);
+
+  --font-main: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ========================================
+   ヘッダー
+   ======================================== */
+#header {
+  background: linear-gradient(135deg, #0d1f3c 0%, #0a1628 100%);
+  border-bottom: 2px solid var(--accent-primary);
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+}
+
+#header .company-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  white-space: nowrap;
+}
+
+#header .month-display {
+  font-size: 1rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+#header .difficulty-badge {
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+#header .difficulty-badge.normal { background: #1b5e20; color: #a5d6a7; }
+#header .difficulty-badge.hard { background: #7f0000; color: #ef9a9a; }
+
+#header .status-message {
+  flex: 1;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+#header .weather-display {
+  font-size: 1.4rem;
+}
+
+/* ========================================
+   メインレイアウト（通常時）
+   ======================================== */
+#main-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  grid-template-rows: 1fr 160px;
+  gap: 8px;
+  padding: 8px;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ========================================
+   パネル共通
+   ======================================== */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  background: var(--bg-secondary);
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.panel-body {
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: var(--bg-secondary); }
+.panel-body::-webkit-scrollbar-thumb { background: var(--accent-secondary); border-radius: 2px; }
+
+/* ========================================
+   左パネル（会社ステータス）
+   ======================================== */
+#left-panel {
+  grid-column: 1;
+  grid-row: 1 / 2;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.stat-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.stat-value {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.stat-value.money { color: var(--accent-gold); }
+.stat-value.debt { color: var(--accent-red); }
+.stat-value.positive { color: var(--accent-green); }
+.stat-value.negative { color: var(--accent-red); }
+
+.level-display {
+  text-align: center;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+.level-display .level-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+.level-display .level-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.reputation-bar {
+  background: var(--bg-card);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  margin: 4px 0 10px;
+}
+.reputation-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-secondary), var(--accent-primary));
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.debt-info {
+  background: rgba(230, 57, 70, 0.1);
+  border: 1px solid rgba(230, 57, 70, 0.3);
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+}
+
+.learning-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.learning-tag {
+  background: rgba(46, 196, 182, 0.15);
+  border: 1px solid var(--accent-green);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.65rem;
+  color: var(--accent-green);
+}
+
+/* ========================================
+   右パネル（意思決定リソース）
+   ======================================== */
+#right-panel {
+  grid-column: 3;
+  grid-row: 1 / 2;
+}
+
+.section-title {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 10px 0 4px;
+}
+.section-title:first-child { margin-top: 0; }
+
+.select-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.select-item:hover:not(.locked):not(.restricted) {
+  border-color: var(--accent-primary);
+  background: var(--bg-highlight);
+}
+.select-item.selected {
+  border-color: var(--accent-primary);
+  background: rgba(0, 180, 216, 0.15);
+  box-shadow: var(--shadow-glow);
+}
+.select-item.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.select-item.restricted {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--accent-red);
+  background: rgba(230, 57, 70, 0.05);
+}
+
+.select-item .item-icon { font-size: 1.1rem; }
+.select-item .item-name { font-size: 0.8rem; font-weight: 500; }
+.select-item .item-sub { font-size: 0.65rem; color: var(--text-muted); margin-left: auto; }
+.select-item .lock-icon { font-size: 0.7rem; color: var(--text-muted); margin-left: auto; }
+.select-item .restrict-badge {
+  font-size: 0.6rem;
+  background: rgba(230,57,70,0.2);
+  color: var(--accent-red);
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: auto;
+}
+
+/* NPC */
+.npc-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.npc-card:hover { border-color: var(--accent-primary); }
+.npc-card.selected {
+  border-color: var(--accent-gold);
+  background: rgba(244, 162, 97, 0.1);
+}
+.npc-name { font-size: 0.8rem; font-weight: 600; }
+.npc-trait { font-size: 0.65rem; color: var(--text-muted); }
+
+/* ========================================
+   中央パネル
+   ======================================== */
+#center-panel {
+  grid-column: 2;
+  grid-row: 1 / 2;
+}
+
+/* ========================================
+   ログパネル（下部）
+   ======================================== */
+#log-panel {
+  grid-column: 1 / 4;
+  grid-row: 2;
+}
+#log-panel .panel-body {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  overflow-y: auto;
+}
+.log-entry {
+  font-size: 0.72rem;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+}
+.log-entry .log-time { color: var(--text-muted); margin-right: 6px; }
+.log-entry.event { color: var(--accent-yellow); }
+.log-entry.result { color: var(--accent-green); }
+.log-entry.system { color: var(--text-muted); }
+
+/* ========================================
+   月開始サマリ（UI-02）
+   ======================================== */
+.month-start-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  height: 100%;
+}
+
+.month-banner {
+  text-align: center;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-highlight));
+  border-radius: 10px;
+  border: 1px solid var(--accent-primary);
+}
+.month-banner .month-num {
+  font-size: 3rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  line-height: 1;
+}
+.month-banner .month-label { color: var(--text-muted); font-size: 0.8rem; }
+
+.info-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.info-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+}
+.info-card-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.info-card-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.info-card-value.weather-sunny { color: var(--accent-yellow); }
+.info-card-value.weather-cloudy { color: #90caf9; }
+.info-card-value.weather-stormy { color: var(--accent-red); }
+
+.regulation-list {
+  font-size: 0.75rem;
+}
+.regulation-item {
+  padding: 4px 6px;
+  background: rgba(230, 57, 70, 0.1);
+  border-radius: 4px;
+  margin-bottom: 3px;
+  color: #ef9a9a;
+}
+.no-regulation { color: var(--accent-green); font-size: 0.8rem; }
+
+/* ========================================
+   判断パネル（UI-03）
+   ======================================== */
+.decision-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.decision-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+}
+.decision-section-title {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.rest-toggle {
+  display: flex;
+  gap: 8px;
+}
+.rest-toggle button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+.rest-toggle button.active-port {
+  background: rgba(0, 180, 216, 0.2);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.rest-toggle button.active-rest {
+  background: rgba(244, 162, 97, 0.2);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.borrow-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.borrow-input {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+.borrow-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.start-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+  box-shadow: var(--shadow-glow);
+}
+.start-btn:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(0, 180, 216, 0.4); }
+.start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cost-preview {
+  display: flex;
+  gap: 12px;
+  font-size: 0.75rem;
+  margin-top: 6px;
+}
+.cost-item { color: var(--text-muted); }
+.cost-item span { color: var(--accent-gold); }
+
+/* ========================================
+   月内進行ビュー（UI-04）
+   ======================================== */
+#running-view {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, #050e1a 0%, #0a1628 50%, #0d1f3c 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.running-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(0,0,0,0.4);
+  border-bottom: 1px solid var(--border-color);
+}
+.running-company { font-weight: 700; color: var(--accent-primary); }
+.running-month { color: var(--accent-gold); font-weight: 600; }
+.running-timer { margin-left: auto; color: var(--text-secondary); font-size: 0.85rem; }
+
+/* 海アニメーション背景 */
+.ocean-bg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.15;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 180, 216, 0.1) 10px,
+    rgba(0, 180, 216, 0.1) 11px
+  );
+  animation: waveMove 8s linear infinite;
+}
+@keyframes waveMove {
+  from { transform: translateX(0) translateY(0); }
+  to { transform: translateX(20px) translateY(10px); }
+}
+
+.running-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  width: 100%;
+  max-width: 700px;
+  padding: 20px;
+}
+
+/* カレンダー */
+.calendar-wrap {
+  margin-bottom: 24px;
+}
+.calendar-month-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 12px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  max-width: 350px;
+  margin: 0 auto;
+}
+.calendar-day-label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2px;
+}
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s;
+}
+.calendar-day.past {
+  background: rgba(0, 180, 216, 0.15);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.calendar-day.current {
+  background: var(--accent-primary);
+  color: white;
+  font-weight: 700;
+  transform: scale(1.15);
+  box-shadow: 0 0 12px var(--accent-primary);
+}
+.calendar-day.event-day {
+  border-color: var(--accent-gold);
+}
+.calendar-day.event-done {
+  background: rgba(244, 162, 97, 0.2);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+.calendar-day.future { opacity: 0.3; }
+
+/* 進行バー */
+.progress-bar-wrap {
+  margin: 16px 0;
+}
+.progress-bar {
+  height: 6px;
+  background: var(--bg-card);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-secondary), var(--accent-primary));
+  border-radius: 3px;
+  transition: width 0.5s linear;
+}
+.progress-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* 操業情報 */
+.operation-info {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+.op-item { text-align: center; }
+.op-icon { font-size: 1.5rem; }
+.op-label { font-size: 0.65rem; color: var(--text-muted); }
+.op-value { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+
+/* イベントカウント */
+.event-count-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.event-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-gold);
+  background: transparent;
+  transition: all 0.3s;
+}
+.event-dot.fired {
+  background: var(--accent-gold);
+  box-shadow: 0 0 6px var(--accent-gold);
+}
+
+/* ========================================
+   イベントモーダル（UI-05）
+   ======================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+
+.event-modal {
+  background: var(--bg-panel);
+  border: 2px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 0 40px rgba(244, 162, 97, 0.3);
+  animation: modalIn 0.3s ease;
+}
+@keyframes modalIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.event-modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  margin-bottom: 10px;
+}
+.event-modal-body {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+.event-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.event-option-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  color: var(--text-primary);
+}
+.event-option-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--bg-highlight);
+}
+.event-option-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 3px;
+}
+.event-option-desc { font-size: 0.75rem; color: var(--text-muted); }
+.risk-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  margin-left: 6px;
+}
+.risk-badge.low { background: rgba(46, 196, 182, 0.2); color: var(--accent-green); }
+.risk-badge.medium { background: rgba(255, 209, 102, 0.2); color: var(--accent-yellow); }
+.risk-badge.high { background: rgba(230, 57, 70, 0.2); color: var(--accent-red); }
+
+/* ========================================
+   結果パネル（UI-06）
+   ======================================== */
+.result-view {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.result-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.result-title { font-size: 1.1rem; font-weight: 700; color: var(--accent-primary); }
+.result-profit {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.result-profit.positive { color: var(--accent-green); }
+.result-profit.negative { color: var(--accent-red); }
+
+.catches-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-bottom: 12px;
+}
+.catches-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-color);
+}
+.catches-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.catches-table td.num { text-align: right; font-family: var(--font-mono); }
+
+.breakdown-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.breakdown-item {
+  background: var(--bg-card);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.75rem;
+}
+.breakdown-label { color: var(--text-muted); margin-bottom: 2px; }
+.breakdown-value { font-weight: 600; font-family: var(--font-mono); }
+
+/* ========================================
+   ニュース（UI-07）
+   ======================================== */
+.news-view {
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+.news-title-bar {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.news-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--accent-secondary);
+}
+.news-card.regulation { border-left-color: var(--accent-red); }
+.news-card.weather { border-left-color: var(--accent-yellow); }
+.news-card.market { border-left-color: var(--accent-green); }
+.news-card.area { border-left-color: var(--accent-primary); }
+.news-card-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.news-card-body {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ========================================
+   成長・解放（UI-08）
+   ======================================== */
+.growth-view {
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.growth-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+}
+.level-up-banner {
+  background: linear-gradient(135deg, rgba(244, 162, 97, 0.2), rgba(244, 162, 97, 0.05));
+  border: 2px solid var(--accent-gold);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+.level-up-banner .new-level {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+.unlock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.unlock-item {
+  background: rgba(0, 180, 216, 0.1);
+  border: 1px solid var(--accent-primary);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.unlock-item .unlock-icon { font-size: 1.1rem; }
+
+.upgrade-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.upgrade-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.upgrade-card.purchased { border-color: var(--accent-green); opacity: 0.7; }
+.upgrade-card.locked { opacity: 0.4; }
+.upgrade-info { flex: 1; }
+.upgrade-name { font-size: 0.8rem; font-weight: 600; }
+.upgrade-desc { font-size: 0.7rem; color: var(--text-muted); }
+.upgrade-cost { font-size: 0.75rem; color: var(--accent-gold); white-space: nowrap; }
+.upgrade-btn {
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-primary);
+  background: rgba(0, 180, 216, 0.1);
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+.upgrade-btn:hover { background: rgba(0, 180, 216, 0.25); }
+.upgrade-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.next-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: auto;
+}
+.next-btn:hover { transform: translateY(-1px); }
+
+/* ========================================
+   セットアップモーダル（UI-01）
+   ======================================== */
+.setup-modal {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.setup-box {
+  background: var(--bg-panel);
+  border: 2px solid var(--accent-primary);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: var(--shadow-glow);
+}
+.setup-game-title {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.setup-game-title h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 4px;
+}
+.setup-game-title p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+.form-input {
+  width: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.difficulty-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.diff-option {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+.diff-option:hover { border-color: var(--accent-primary); }
+.diff-option.selected-normal {
+  border-color: #2e7d32;
+  background: rgba(46, 125, 50, 0.2);
+}
+.diff-option.selected-hard {
+  border-color: var(--accent-red);
+  background: rgba(183, 28, 28, 0.2);
+}
+.diff-name { font-weight: 700; font-size: 0.9rem; }
+.diff-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 3px; }
+
+.setup-start-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.setup-start-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-glow); }
+.setup-start-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ========================================
+   リザルト / ランキング（UI-12/13）
+   ======================================== */
+.end-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  backdrop-filter: blur(6px);
+}
+.result-box {
+  background: var(--bg-panel);
+  border: 2px solid var(--accent-primary);
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 520px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-glow);
+}
+.result-box h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 6px;
+}
+.final-score {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  margin: 12px 0;
+}
+.score-breakdown {
+  background: var(--bg-card);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+  font-size: 0.8rem;
+}
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.score-row.total {
+  border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+  padding-top: 7px;
+  font-weight: 700;
+}
+
+.ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-top: 12px;
+}
+.ranking-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+.ranking-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.ranking-table tr.my-rank {
+  background: rgba(0, 180, 216, 0.1);
+}
+.ranking-table td:first-child { color: var(--accent-gold); font-weight: 700; }
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.btn-primary {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-secondary {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-secondary:hover { border-color: var(--accent-primary); }
+
+/* ========================================
+   ユーティリティ
+   ======================================== */
+.hidden { display: none !important; }
+.text-center { text-align: center; }
+.text-gold { color: var(--accent-gold); }
+.text-green { color: var(--accent-green); }
+.text-red { color: var(--accent-red); }
+.text-muted { color: var(--text-muted); }
+.mt-8 { margin-top: 8px; }
+.mb-8 { margin-bottom: 8px; }
+
+/* 通貨フォーマット */
+.currency::before { content: '¥'; font-size: 0.75em; }
+
+/* アニメーション */
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.slide-in { animation: slideIn 0.3s ease; }
+@keyframes slideIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-secondary); }
+::-webkit-scrollbar-thumb { background: var(--accent-secondary); border-radius: 2px; }
