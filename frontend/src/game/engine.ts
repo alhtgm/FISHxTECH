@@ -8,22 +8,28 @@ import type {
 } from './types';
 import {
   FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN,
-  UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG,
+  UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG, DIFFICULTY_CONFIG,
 } from './data';
+import type { Difficulty } from './types';
+
+function getDC(difficulty: Difficulty) {
+  return DIFFICULTY_CONFIG[difficulty];
+}
 
 // ----------------------------------------
 // 初期状態生成
 // ----------------------------------------
 export function createInitialState(): GameState {
+  const dc = getDC('normal');
   return {
     phase: 'INIT',
     companyName: '',
     difficulty: 'normal',
     month: 1,
-    money: GAME_CONFIG.INITIAL_MONEY,
+    money: dc.initialMoney,
     debt: 0,
     debtTurnsLeft: 0,
-    interestRate: GAME_CONFIG.INTEREST_RATE,
+    interestRate: dc.interestRate,
     reputation: 50,
     level: 1,
     unlockedAreas: ['kaga', 'nanao-bay'],
@@ -58,10 +64,23 @@ export function setPhase(state: GameState, phase: GamePhase): GameState {
 }
 
 // ----------------------------------------
+// ゲーム開始（難易度パラメータ適用）
+// ----------------------------------------
+export function startGame(state: GameState): GameState {
+  const dc = getDC(state.difficulty);
+  return startMonth({
+    ...state,
+    money: dc.initialMoney,
+    interestRate: dc.interestRate,
+    phase: 'MONTH_START',
+  });
+}
+
+// ----------------------------------------
 // 月開始処理
 // ----------------------------------------
 export function startMonth(state: GameState): GameState {
-  const weather = rollWeather();
+  const weather = rollWeather(state.difficulty);
   const regulations = REGULATIONS.filter(r => r.month === state.month);
   const newsTemplate = NEWS_TEMPLATES.find(n => n.month === state.month);
   const news = newsTemplate ? newsTemplate.items : [];
@@ -82,10 +101,11 @@ export function startMonth(state: GameState): GameState {
   };
 }
 
-function rollWeather(): Weather {
+function rollWeather(difficulty: Difficulty): Weather {
+  const dc = getDC(difficulty);
   const r = Math.random();
-  if (r < 0.45) return 'sunny';
-  if (r < 0.75) return 'cloudy';
+  if (r < dc.weatherSunny) return 'sunny';
+  if (r < dc.weatherSunny + dc.weatherCloudy) return 'cloudy';
   return 'stormy';
 }
 
@@ -94,17 +114,15 @@ function rollWeather(): Weather {
 // ----------------------------------------
 export function applyBorrow(state: GameState, amount: number): GameState {
   if (amount <= 0) return state;
-  const maxDebt = state.difficulty === 'normal'
-    ? GAME_CONFIG.MAX_DEBT_NORMAL
-    : GAME_CONFIG.MAX_DEBT_HARD;
+  const dc = getDC(state.difficulty);
   const newDebt = state.debt + amount;
-  if (newDebt > maxDebt) return state;
+  if (newDebt > dc.maxDebt) return state;
 
   return {
     ...state,
     money: state.money + amount,
     debt: newDebt,
-    debtTurnsLeft: state.debt === 0 ? GAME_CONFIG.DEBT_REPAY_TURNS : state.debtTurnsLeft,
+    debtTurnsLeft: state.debt === 0 ? dc.debtRepayTurns : state.debtTurnsLeft,
   };
 }
 
@@ -225,7 +243,7 @@ export function finishMonth(state: GameState): GameState {
 
   // 休業時の副業収入
   if (state.isResting) {
-    money += GAME_CONFIG.REST_INCOME;
+    money += getDC(state.difficulty).restIncome;
   }
 
   const totalProfit = state.totalProfit + result.profit;
@@ -285,18 +303,20 @@ function calcLevel(totalProfit: number): number {
 
 function calculateMonthResult(state: GameState): MonthResult {
   const { selectedAreaId, selectedMethodId, isResting, currentWeather, difficulty } = state;
+  const dc = getDC(difficulty);
 
   if (isResting) {
+    const ic = calcInterest(state);
     return {
       isResting: true,
       weather: currentWeather,
       catches: [],
       totalRevenue: 0,
       fuelCost: 0,
-      fixedCost: GAME_CONFIG.FIXED_COST_PER_MONTH,
+      fixedCost: dc.fixedCostPerMonth,
       eventCostDelta: 0,
-      interestCost: calcInterest(state),
-      profit: -GAME_CONFIG.FIXED_COST_PER_MONTH - calcInterest(state) + GAME_CONFIG.REST_INCOME,
+      interestCost: ic,
+      profit: -dc.fixedCostPerMonth - ic + dc.restIncome,
       yieldMultiplier: 1.0,
       events: state.scheduledEvents,
     };
@@ -306,7 +326,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   const method = FISHING_METHODS.find(m => m.id === selectedMethodId)!;
 
   if (!area || !method) {
-    return emptyResult(currentWeather, calcInterest(state));
+    return emptyResult(currentWeather, calcInterest(state), state.difficulty);
   }
 
   // 対象魚種を絞る（海域×漁法の交差）
@@ -315,7 +335,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   );
 
   if (validFish.length === 0) {
-    return emptyResult(currentWeather, calcInterest(state));
+    return emptyResult(currentWeather, calcInterest(state), state.difficulty);
   }
 
   // 天候補正
@@ -353,15 +373,13 @@ function calculateMonthResult(state: GameState): MonthResult {
   // 水揚げ量計算
   const baseVariance = Math.max(0.05, method.yieldVariance - fisherStabilityBonus * 0.2);
   const yieldNoise = 1 + (Math.random() * 2 - 1) * baseVariance;
-  const totalYieldMultiplier = weatherMultiplier * eventYieldMultiplier * learningYieldBonus
+  const totalYieldMultiplier = dc.baseYieldMultiplier * weatherMultiplier * eventYieldMultiplier * learningYieldBonus
     * fisherYieldBonus * specialBonus * (1 + upgradeYieldBonus) * yieldNoise;
   const baseYield = method.baseYield * totalYieldMultiplier;
 
   // 魚種ごとの分配
   const catches: CatchRecord[] = [];
-  const priceVariance = difficulty === 'normal'
-    ? GAME_CONFIG.PRICE_VARIANCE_NORMAL * (1 - priceVarianceReduction)
-    : GAME_CONFIG.PRICE_VARIANCE_HARD * (1 - priceVarianceReduction);
+  const priceVariance = dc.priceVariance * (1 - priceVarianceReduction);
 
   // 魚種ウェイト（レア度・旬を考慮）
   const weights = validFish.map(f => {
@@ -391,9 +409,9 @@ function calculateMonthResult(state: GameState): MonthResult {
 
   // コスト計算
   const fuelCost = Math.round(
-    GAME_CONFIG.FUEL_COST_PER_UNIT * area.distance * method.fuelMultiplier * (1 - fuelReduction)
+    dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction)
   );
-  const fixedCost = GAME_CONFIG.FIXED_COST_PER_MONTH;
+  const fixedCost = dc.fixedCostPerMonth;
   const interestCost = calcInterest(state);
   const profit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost;
 
@@ -414,8 +432,8 @@ function calculateMonthResult(state: GameState): MonthResult {
   };
 }
 
-function emptyResult(weather: Weather, interestCost: number): MonthResult {
-  const fixedCost = GAME_CONFIG.FIXED_COST_PER_MONTH;
+function emptyResult(weather: Weather, interestCost: number, difficulty: Difficulty = 'normal'): MonthResult {
+  const fixedCost = getDC(difficulty).fixedCostPerMonth;
   return {
     isResting: false,
     weather,
@@ -504,14 +522,17 @@ export function checkGrowth(state: GameState): GameState {
 // 次の月へ or ゲーム終了
 // ----------------------------------------
 export function proceedToNextMonth(state: GameState): GameState {
-  // 強制終了チェック
+  const dc = getDC(state.difficulty);
+  // 強制終了チェック（借金返済期限切れ）
   if (state.debt > 0 && state.debtTurnsLeft === 0) {
     return { ...state, phase: 'END' };
   }
-  const maxDebt = state.difficulty === 'normal'
-    ? GAME_CONFIG.MAX_DEBT_NORMAL
-    : GAME_CONFIG.MAX_DEBT_HARD;
-  if (state.debt > maxDebt) {
+  // 借金上限超過
+  if (state.debt > dc.maxDebt) {
+    return { ...state, phase: 'END' };
+  }
+  // 資金不足による破産（資金マイナス かつ これ以上借りられない）
+  if (state.money < 0 && state.debt >= dc.maxDebt) {
     return { ...state, phase: 'END' };
   }
 
@@ -568,7 +589,7 @@ export function repayDebt(state: GameState, amount: number): GameState {
 // スコア計算
 // ----------------------------------------
 export function calculateScore(state: GameState): number {
-  const difficultyMultiplier = state.difficulty === 'hard' ? 1.5 : 1.0;
+  const difficultyMultiplier = getDC(state.difficulty).scoreMultiplier;
   const levelBonus = (state.level - 1) * 500000;
   const unlockedBonus = (state.unlockedAreas.length + state.unlockedMethods.length) * 100000;
   const reputationBonus = state.reputation * 10000;

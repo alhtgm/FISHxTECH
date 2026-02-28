@@ -68,6 +68,8 @@ html, body {
 #header .difficulty-badge { padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
 #header .difficulty-badge.normal { background: #1b5e20; color: #a5d6a7; }
 #header .difficulty-badge.hard { background: #7f0000; color: #ef9a9a; }
+#header .difficulty-badge.extreme { background: #1a0a00; color: #ff6b35; border: 1px solid #ff6b35; animation: extremePulse 1.5s ease-in-out infinite; }
+@keyframes extremePulse { 0%,100% { box-shadow: 0 0 4px rgba(255,107,53,0.4); } 50% { box-shadow: 0 0 12px rgba(255,107,53,0.9); } }
 #header .status-message { flex: 1; text-align: center; color: var(--text-secondary); font-size: 0.85rem; }
 #header .weather-display { font-size: 1.4rem; }
 
@@ -754,6 +756,8 @@ html, body {
 .diff-option:hover { transform: translateY(-2px); }
 .diff-option.selected-normal { border-color: #2e7d32; background: rgba(46, 125, 50, 0.15); box-shadow: 0 0 15px rgba(46,125,50,0.2); }
 .diff-option.selected-hard { border-color: var(--accent-red); background: rgba(183, 28, 28, 0.15); box-shadow: 0 0 15px rgba(183,28,28,0.2); }
+.diff-option.selected-extreme { border-color: #ff6b35; background: rgba(180, 60, 0, 0.15); box-shadow: 0 0 20px rgba(255,107,53,0.4); animation: extremePulse 1.5s ease-in-out infinite; }
+.diff-desc { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; line-height: 1.5; }
 .diff-name { font-weight: 700; font-size: 0.9rem; }
 .diff-desc { font-size: 0.7rem; color: var(--text-muted); margin-top: 3px; }
 .setup-start-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary)); border: none; border-radius: 8px; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 20px rgba(0,180,216,0.3); }

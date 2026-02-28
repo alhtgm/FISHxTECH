@@ -14,7 +14,7 @@ export type GamePhase =
   | 'GROWTH'
   | 'END';
 
-export type Difficulty = 'normal' | 'hard';
+export type Difficulty = 'normal' | 'hard' | 'extreme';
 export type Weather = 'sunny' | 'cloudy' | 'stormy';
 
 // ========================================

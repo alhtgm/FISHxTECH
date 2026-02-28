@@ -696,17 +696,55 @@ export const NEWS_TEMPLATES: Array<{
 // ゲーム定数
 // ----------------------------------------
 export const GAME_CONFIG = {
-  INITIAL_MONEY: 3000000,          // 初期資金300万円
-  FIXED_COST_PER_MONTH: 200000,    // 月次固定費20万円
-  FUEL_COST_PER_UNIT: 100000,      // 燃料基本費10万円
-  INTEREST_RATE: 0.05,             // 月利5%
-  MAX_DEBT_NORMAL: 5000000,        // 借金上限（ノーマル）
-  MAX_DEBT_HARD: 3000000,          // 借金上限（ハード）
-  DEBT_REPAY_TURNS: 3,             // 返済猶予ターン
   RUNNING_DURATION: 30,            // 月内進行時間（秒）
   MAX_EVENTS_PER_MONTH: 3,         // 月最大イベント数
   LEVEL_THRESHOLDS: [0, 2000000, 5000000, 10000000, 20000000], // レベル別累積利益
-  PRICE_VARIANCE_NORMAL: 0.10,     // 価格ブレ（ノーマル）
-  PRICE_VARIANCE_HARD: 0.20,       // 価格ブレ（ハード）
-  REST_INCOME: 50000,              // 休業時の副業収入（固定費の一部回収）
+};
+
+// ----------------------------------------
+// 難易度別パラメータ
+// ----------------------------------------
+export const DIFFICULTY_CONFIG = {
+  normal: {
+    initialMoney: 3_000_000,       // 初期資金
+    fixedCostPerMonth: 250_000,    // 月次固定費（25万）
+    fuelCostPerUnit: 110_000,      // 燃料基本費
+    interestRate: 0.05,            // 月利5%
+    priceVariance: 0.15,           // 価格ブレ±15%
+    maxDebt: 5_000_000,            // 借金上限
+    debtRepayTurns: 3,             // 返済猶予ターン
+    weatherSunny: 0.42,            // 晴れ確率
+    weatherCloudy: 0.30,           // 曇り確率（残りは嵐）
+    baseYieldMultiplier: 1.0,      // 水揚げ量補正
+    scoreMultiplier: 1.0,          // スコア倍率
+    restIncome: 50_000,            // 休業時収入
+  },
+  hard: {
+    initialMoney: 3_000_000,
+    fixedCostPerMonth: 320_000,    // 月次固定費（32万）
+    fuelCostPerUnit: 140_000,      // 燃料費UP
+    interestRate: 0.08,            // 月利8%
+    priceVariance: 0.30,           // 価格ブレ±30%
+    maxDebt: 2_000_000,            // 借金上限200万
+    debtRepayTurns: 2,             // 返済猶予2ターン
+    weatherSunny: 0.35,
+    weatherCloudy: 0.27,           // 嵐が38%
+    baseYieldMultiplier: 0.85,     // 水揚げ量-15%
+    scoreMultiplier: 2.0,
+    restIncome: 20_000,
+  },
+  extreme: {
+    initialMoney: 1_500_000,       // 初期資金150万（すぐ底をつく）
+    fixedCostPerMonth: 420_000,    // 月次固定費（42万！）
+    fuelCostPerUnit: 180_000,      // 燃料費激増
+    interestRate: 0.15,            // 月利15%（借金地獄）
+    priceVariance: 0.50,           // 価格ブレ±50%（博打）
+    maxDebt: 500_000,              // 借金上限50万しか借りられない
+    debtRepayTurns: 1,             // 来月中に返済必須
+    weatherSunny: 0.20,
+    weatherCloudy: 0.30,           // 嵐が50%
+    baseYieldMultiplier: 0.60,     // 水揚げ量-40%
+    scoreMultiplier: 5.0,
+    restIncome: 0,                 // 休業しても収入ゼロ
+  },
 };

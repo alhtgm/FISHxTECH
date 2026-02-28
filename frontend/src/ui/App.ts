@@ -6,12 +6,12 @@ import '../styles/main.css';
 import { audioManager } from '../game/audio';
 import type { GameState, EventOption } from '../game/types';
 import {
-  createInitialState, setPhase, startMonth, applyBorrow,
+  createInitialState, setPhase, startMonth, startGame, applyBorrow,
   prepareOperation, advanceDay, resolveEvent, finishMonth,
   checkGrowth, proceedToNextMonth, purchaseUpgrade, calculateScore,
   isAreaRestricted, isMethodRestricted,
 } from '../game/engine';
-import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN, GAME_CONFIG } from '../game/data';
+import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN, GAME_CONFIG, DIFFICULTY_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
 
 // ========================================
@@ -79,14 +79,15 @@ function calcExpectedProfit(
   const area = FISHING_AREAS.find(a => a.id === areaId)!;
   const method = FISHING_METHODS.find(m => m.id === methodId)!;
   const validFish = FISH_SPECIES.filter(f => f.areas.includes(areaId) && f.methods.includes(methodId));
+  const dc = DIFFICULTY_CONFIG[difficulty as 'normal' | 'hard' | 'extreme'] ?? DIFFICULTY_CONFIG.normal;
 
   const weatherMult = weather === 'sunny' ? 1.0 : weather === 'cloudy' ? 0.9 : 0.55;
-  const priceVar = difficulty === 'normal' ? GAME_CONFIG.PRICE_VARIANCE_NORMAL : GAME_CONFIG.PRICE_VARIANCE_HARD;
-  const fuelCost = Math.round(GAME_CONFIG.FUEL_COST_PER_UNIT * area.distance * method.fuelMultiplier * (1 - fuelReduction));
-  const fixedCost = GAME_CONFIG.FIXED_COST_PER_MONTH;
+  const priceVar = dc.priceVariance;
+  const fuelCost = Math.round(dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction));
+  const fixedCost = dc.fixedCostPerMonth;
 
   // 期待収益（楽観・悲観）
-  const baseYield = method.baseYield * weatherMult;
+  const baseYield = method.baseYield * weatherMult * dc.baseYieldMultiplier;
   let totalRevMin = 0, totalRevMax = 0;
   const weights = validFish.map(f => Math.max(0, f.seasonality[month - 1] * (f.rarity === 'common' ? 1 : f.rarity === 'uncommon' ? 0.4 : 0.1)));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
@@ -199,11 +200,15 @@ export class App {
             <div class="difficulty-options">
               <div class="diff-option ${this.state.difficulty === 'normal' ? 'selected-normal' : ''}" data-diff="normal">
                 <div class="diff-name" style="color:#a5d6a7">🟢 ノーマル</div>
-                <div class="diff-desc">価格変動 ±10%<br>初回おすすめ</div>
+                <div class="diff-desc">価格変動 ±15%・固定費25万<br>嵐確率28%・スコア×1.0</div>
               </div>
               <div class="diff-option ${this.state.difficulty === 'hard' ? 'selected-hard' : ''}" data-diff="hard">
                 <div class="diff-name" style="color:#ef9a9a">🔴 ハード</div>
-                <div class="diff-desc">価格変動 ±20%<br>スコア×1.5倍</div>
+                <div class="diff-desc">価格変動 ±30%・固定費32万<br>嵐確率38%・スコア×2.0</div>
+              </div>
+              <div class="diff-option ${this.state.difficulty === 'extreme' ? 'selected-extreme' : ''}" data-diff="extreme">
+                <div class="diff-name" style="color:#ff6b35">☠️ 激ムズ</div>
+                <div class="diff-desc">初期資金150万・固定費42万<br>嵐確率50%・月利15%<br>ほぼ破産確定・スコア×5.0</div>
               </div>
             </div>
           </div>
@@ -225,10 +230,10 @@ export class App {
     });
     document.querySelectorAll('.diff-option').forEach(opt => {
       opt.addEventListener('click', () => {
-        const diff = (opt as HTMLElement).dataset.diff as 'normal' | 'hard';
+        const diff = (opt as HTMLElement).dataset.diff as 'normal' | 'hard' | 'extreme';
         this.state = { ...this.state, difficulty: diff };
-        document.querySelectorAll('.diff-option').forEach(o => o.classList.remove('selected-normal', 'selected-hard'));
-        opt.classList.add(diff === 'normal' ? 'selected-normal' : 'selected-hard');
+        document.querySelectorAll('.diff-option').forEach(o => o.classList.remove('selected-normal', 'selected-hard', 'selected-extreme'));
+        opt.classList.add(diff === 'normal' ? 'selected-normal' : diff === 'hard' ? 'selected-hard' : 'selected-extreme');
       });
     });
     startBtn?.addEventListener('click', () => {
@@ -236,7 +241,7 @@ export class App {
       audioManager.resume();
       audioManager.startBGM();
       audioManager.playSE('decision');
-      this.setState(s => startMonth({ ...s, phase: 'MONTH_START' }));
+      this.setState(s => startGame(s));
     });
   }
 
@@ -297,7 +302,7 @@ export class App {
     <div id="header">
       <span class="company-name">🏢 ${companyName}</span>
       <span class="month-display">${month}月</span>
-      <span class="difficulty-badge ${difficulty}">${difficulty === 'normal' ? 'ノーマル' : 'ハード'}</span>
+      <span class="difficulty-badge ${difficulty}">${difficulty === 'normal' ? 'ノーマル' : difficulty === 'hard' ? 'ハード' : '☠️激ムズ'}</span>
       <span class="status-message">${phaseMsg}</span>
       <span class="weather-display">${weatherIcon}</span>
       <span style="font-size:0.85rem;color:var(--accent-gold);font-weight:700">¥${money.toLocaleString()}</span>
@@ -531,9 +536,10 @@ export class App {
     const method = FISHING_METHODS.find(m => m.id === selectedMethodId);
 
     // コスト計算
+    const dc = DIFFICULTY_CONFIG[this.state.difficulty];
     const fuelReduction = this.state.upgrades.filter(u => u.purchased).reduce((a, u) => a + (u.effect.fuelCostReduction || 0), 0);
     const fuelCost = area && method
-      ? Math.round(GAME_CONFIG.FUEL_COST_PER_UNIT * area.distance * method.fuelMultiplier * (1 - fuelReduction))
+      ? Math.round(dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction))
       : 0;
     const canStart = isResting || (!!selectedAreaId && !!selectedMethodId);
 
@@ -604,7 +610,7 @@ export class App {
           </div>
           ${area && method ? `<div class="cost-preview">
             <div class="cost-item">⛽ 燃料費 <span>¥${fuelCost.toLocaleString()}</span></div>
-            <div class="cost-item">🏢 固定費 <span>¥${GAME_CONFIG.FIXED_COST_PER_MONTH.toLocaleString()}</span></div>
+            <div class="cost-item">🏢 固定費 <span>¥${dc.fixedCostPerMonth.toLocaleString()}</span></div>
           </div>` : ''}
         </div>
         ${previewHtml}
@@ -612,7 +618,7 @@ export class App {
         <div class="decision-section" style="background:rgba(244,162,97,0.05);border-color:rgba(244,162,97,0.3)">
           <div style="font-size:0.8rem;color:var(--accent-gold)">
             🏠 休業を選択<br>
-            <span style="color:var(--text-muted);font-size:0.72rem">副業収入 ¥${GAME_CONFIG.REST_INCOME.toLocaleString()} / 固定費 ¥${GAME_CONFIG.FIXED_COST_PER_MONTH.toLocaleString()}</span>
+            <span style="color:var(--text-muted);font-size:0.72rem">副業収入 ¥${dc.restIncome.toLocaleString()} / 固定費 ¥${dc.fixedCostPerMonth.toLocaleString()}</span>
           </div>
         </div>`}
         <div class="decision-section">
@@ -625,7 +631,7 @@ export class App {
             <button id="borrow-btn" class="upgrade-btn" ${this.state.debt > 0 ? 'disabled' : ''}>借入</button>
           </div>
           <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px">
-            月利 ${(GAME_CONFIG.INTEREST_RATE * 100).toFixed(0)}% / 返済期限 ${GAME_CONFIG.DEBT_REPAY_TURNS}ターン
+            月利 ${(dc.interestRate * 100).toFixed(0)}% / 返済期限 ${dc.debtRepayTurns}ターン / 上限¥${dc.maxDebt.toLocaleString()}
           </div>
         </div>
         <button id="operation-start-btn" class="start-btn" ${canStart ? '' : 'disabled'}>
@@ -686,7 +692,7 @@ export class App {
         <div style="text-align:center;padding:24px;color:var(--accent-gold)">
           <div style="font-size:3rem;animation:bannerPop 0.5s cubic-bezier(0.34,1.56,0.64,1)">🏠</div>
           <div style="font-size:1.1rem;font-weight:700;margin-top:10px">今月は休業</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">副業収入: ¥${GAME_CONFIG.REST_INCOME.toLocaleString()}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">副業収入: ¥${DIFFICULTY_CONFIG[this.state.difficulty].restIncome.toLocaleString()}</div>
         </div>` : `
         ${isHugeCatch ? `<div class="big-catch-banner">🎉 大漁！今月は絶好調でした！</div>` : ''}
         <div class="result-header">
@@ -1112,7 +1118,7 @@ export class App {
   private renderEndModal(): string {
     const score = calculateScore(this.state);
     const { companyName, totalProfit, level, difficulty, reputation, debt, unlockedAreas, unlockedMethods } = this.state;
-    const dm = difficulty === 'hard' ? 1.5 : 1.0;
+    const dm = DIFFICULTY_CONFIG[difficulty].scoreMultiplier;
     const levelBonus = (level - 1) * 500000;
     const unlockedBonus = (unlockedAreas.length + unlockedMethods.length) * 100000;
     const repBonus = reputation * 10000;
@@ -1129,7 +1135,7 @@ export class App {
           <div class="score-row"><span>解放ボーナス (${unlockedAreas.length}海域/${unlockedMethods.length}漁法)</span><span class="text-gold">+¥${unlockedBonus.toLocaleString()}</span></div>
           <div class="score-row"><span>評判ボーナス (${reputation}pt)</span><span class="text-gold">+¥${repBonus.toLocaleString()}</span></div>
           ${debt > 0 ? `<div class="score-row"><span>借金ペナルティ</span><span class="text-red">-¥${debtPenalty.toLocaleString()}</span></div>` : ''}
-          <div class="score-row"><span>難易度補正</span><span>×${dm}</span></div>
+          <div class="score-row"><span>難易度補正 (${difficulty === 'normal' ? 'ノーマル' : difficulty === 'hard' ? 'ハード' : '☠️激ムズ'})</span><span>×${dm}</span></div>
           <div class="score-row total"><span>最終スコア</span><span class="text-gold">${score.toLocaleString()} pt</span></div>
         </div>
         <div id="ranking-section"><div style="color:var(--text-muted);font-size:0.8rem">ランキングを読み込み中...</div></div>
