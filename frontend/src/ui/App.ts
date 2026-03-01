@@ -4,7 +4,12 @@
 
 import '../styles/main.css';
 import { audioManager } from '../game/audio';
-import type { GameState, EventOption } from '../game/types';
+import type { BGMScene } from '../game/audio';
+import type { GameState, EventOption, EventEffect, GamePhase } from '../game/types';
+import {
+  PROLOGUE_SLIDES, STORY_BEATS, TUTORIAL_STEPS, CHARACTERS,
+  type StoryBeat,
+} from '../game/story';
 import {
   createInitialState, setPhase, startMonth, startGame, applyBorrow,
   prepareOperation, advanceDay, resolveEvent, finishMonth,
@@ -123,6 +128,7 @@ export class App {
   private runningRaf: number | null = null;
   private runningStartTime: number | null = null;
   private lastDay = 0;
+  private bgmStarted = false;
 
   constructor(rootId: string) {
     this.root = document.getElementById(rootId)!;
@@ -144,36 +150,71 @@ export class App {
   }
 
   // ========================================
+  // BGMシーン制御
+  // ========================================
+  private getBGMScene(phase: GamePhase): BGMScene {
+    switch (phase) {
+      case 'INIT': case 'PROLOGUE': case 'SETUP': case 'MONTH_START': return 'exploration';
+      case 'DECISION': return 'decision';
+      case 'RUNNING': case 'EVENT':
+        return this.state.currentWeather === 'stormy' ? 'storm' : 'sailing';
+      case 'RESULT': case 'NEWS': return 'result';
+      case 'GROWTH': return 'growth';
+      case 'END': return 'result';
+      default: return 'exploration';
+    }
+  }
+
+  // ========================================
   // メインレンダリング
   // ========================================
   private render() {
     const { phase } = this.state;
-    if (phase === 'INIT' || phase === 'SETUP') {
+
+    // BGMシーン切り替え
+    if (this.bgmStarted) {
+      audioManager.switchScene(this.getBGMScene(phase));
+    }
+
+    // プロローグ（初回起動 or PROLOGUE フェーズ）
+    if (phase === 'INIT' || phase === 'PROLOGUE') {
+      this.root.innerHTML = this.renderPrologue();
+      this.bindPrologue();
+      return;
+    }
+    // セットアップ
+    if (phase === 'SETUP') {
       this.root.innerHTML = this.renderSetup();
       this.bindSetup();
       return;
     }
+    // 操業中
     if (phase === 'RUNNING') {
       this.root.innerHTML = this.renderRunningView();
       this.startRunning();
+      this.appendTutorialOverlay();
       return;
     }
-    if (phase === 'EVENT') {
-      this.root.innerHTML = this.renderMainLayout() + this.renderEventModal();
-      this.bindMainLayout();
-      this.bindEventModal();
-      return;
-    }
-    if (phase === 'END') {
-      this.root.innerHTML = this.renderMainLayout() + this.renderEndModal();
-      this.bindMainLayout();
-      this.bindEndModal();
-      return;
-    }
-    this.root.innerHTML = this.renderMainLayout();
-    this.bindMainLayout();
 
-    // 結果フェーズのアニメーション
+    // メインレイアウト + オーバーレイ類
+    let html = this.renderMainLayout();
+    if (phase === 'EVENT') html += this.renderEventModal();
+    if (phase === 'END') html += this.renderEndModal();
+
+    // ストーリービートモーダル（月初・未読）
+    const beat = STORY_BEATS.find(b => b.month === this.state.month);
+    const showingStoryBeat = phase === 'MONTH_START' && !this.state.storyBeatSeen && !!beat;
+    if (showingStoryBeat && beat) html += this.renderStoryBeatModal(beat);
+
+    this.root.innerHTML = html;
+    this.bindMainLayout();
+    if (phase === 'EVENT') this.bindEventModal();
+    if (phase === 'END') this.bindEndModal();
+    if (showingStoryBeat) this.bindStoryBeat();
+
+    // チュートリアルはストーリービートがない時だけ表示
+    if (!showingStoryBeat) this.appendTutorialOverlay();
+
     if (phase === 'RESULT') this.animateResult();
   }
 
@@ -239,7 +280,8 @@ export class App {
     startBtn?.addEventListener('click', () => {
       if (!this.state.companyName.trim()) return;
       audioManager.resume();
-      audioManager.startBGM();
+      audioManager.startBGM('exploration');
+      this.bgmStarted = true;
       audioManager.playSE('decision');
       this.setState(s => startGame(s));
     });
@@ -361,6 +403,15 @@ export class App {
             ${learningBonuses.map(lb => `<span class="learning-tag" title="${lb.description}">${lb.description.split('：')[0]} (${lb.remainingMonths}ヶ月)</span>`).join('')}
           </div>
         </div>` : ''}
+        ${this.state.currentNews.length > 0 ? `
+        <div class="news-sidebar">
+          <div class="news-sidebar-title">📰 今月のニュース</div>
+          ${this.state.currentNews.slice(0, 3).map(n => `
+          <div class="news-mini-card ${n.category}">
+            <div class="news-mini-title">${n.title}</div>
+            <div class="news-mini-body">${n.body}</div>
+          </div>`).join('')}
+        </div>` : ''}
       </div>
     </div>`;
   }
@@ -371,6 +422,8 @@ export class App {
   private renderRightPanel(): string {
     const { selectedAreaId, selectedMethodId, selectedFishermanId, phase, unlockedAreas, unlockedMethods } = this.state;
     const isDecision = phase === 'DECISION';
+    const isGrowth = phase === 'GROWTH';
+    const showUnlocked = isDecision || isGrowth; // 開放表示モード
 
     const areasHtml = FISHING_AREAS.map(area => {
       const unlocked = unlockedAreas.includes(area.id);
@@ -380,9 +433,10 @@ export class App {
       if (!unlocked) cls += ' locked';
       else if (restricted) cls += ' restricted';
       else if (selected) cls += ' selected';
-      const badge = !unlocked ? '<span class="lock-icon">🔒</span>'
+      const badge = !unlocked ? `<span class="lock-icon">🔒 Lv.${area.unlockLevel}</span>`
         : restricted ? '<span class="restrict-badge">規制中</span>' : '';
-      return `<div class="${cls}" data-area="${area.id}" ${!isDecision || !unlocked || restricted ? 'style="pointer-events:none"' : ''}>
+      const interactive = isDecision && unlocked && !restricted;
+      return `<div class="${cls}" data-area="${area.id}" ${!interactive ? 'style="pointer-events:none"' : ''}>
         <span class="item-icon">${area.icon}</span>
         <span class="item-name">${area.name}</span>
         <span class="item-sub">${unlocked ? `距×${area.distance}` : `Lv.${area.unlockLevel}`}</span>${badge}
@@ -400,28 +454,54 @@ export class App {
       else if (restricted) cls += ' restricted';
       else if (selected) cls += ' selected';
       else if (!applicable && area) cls += ' locked';
-      const badge = !unlocked ? '<span class="lock-icon">🔒</span>'
+      const badge = !unlocked ? `<span class="lock-icon">🔒 Lv.${method.unlockLevel}</span>`
         : restricted ? '<span class="restrict-badge">規制中</span>'
         : !applicable && area ? '<span class="restrict-badge">不可</span>' : '';
+      const interactive = isDecision && unlocked && !restricted && (applicable || !area);
       return `<div class="${cls}" data-method="${method.id}"
-        ${!isDecision || !unlocked || restricted || (!applicable && !!area) ? 'style="pointer-events:none"' : ''}>
+        ${!interactive ? 'style="pointer-events:none"' : ''}>
         <span class="item-icon">${method.icon}</span>
         <span class="item-name">${method.name}</span>
         <span class="item-sub">燃×${method.fuelMultiplier}</span>${badge}
       </div>`;
     }).join('');
 
-    const fishermenHtml = FISHERMEN.map(f => `
+    // 漁師カード（詳細ステータス表示）
+    const fishermenHtml = FISHERMEN.map(f => {
+      const yieldPct = Math.round((f.yieldBonus - 1) * 100);
+      const stabilityLabel = f.stabilityBonus >= 0.2 ? '高' : f.stabilityBonus >= 0 ? '中' : '低';
+      const stabilityClass = f.stabilityBonus >= 0.2 ? 'pos' : f.stabilityBonus >= 0 ? 'neu' : 'neg';
+      const eventPct = Math.round(f.eventBonus * 100);
+      const specialBadge = f.specialMethod
+        ? `<div class="npc-specialty-badge">${FISHING_METHODS.find(m => m.id === f.specialMethod)?.icon ?? ''} ${FISHING_METHODS.find(m => m.id === f.specialMethod)?.name ?? ''} 専門</div>`
+        : '';
+      return `
       <div class="npc-card ${selectedFishermanId === f.id ? 'selected' : ''}" data-fisher="${f.id}"
         ${!isDecision ? 'style="pointer-events:none"' : ''}>
         <div class="npc-name">${f.name}</div>
-        <div class="npc-trait">${f.description.slice(0, 30)}...</div>
-      </div>`).join('');
+        <div class="npc-stats">
+          <div class="npc-stat-row">
+            <span class="npc-stat-label">水揚げ</span>
+            <span class="npc-stat-val ${yieldPct >= 0 ? 'pos' : 'neg'}">${yieldPct >= 0 ? '+' : ''}${yieldPct}%</span>
+          </div>
+          <div class="npc-stat-row">
+            <span class="npc-stat-label">安定性</span>
+            <span class="npc-stat-val ${stabilityClass}">${stabilityLabel}</span>
+          </div>
+          <div class="npc-stat-row">
+            <span class="npc-stat-label">イベント成功率</span>
+            <span class="npc-stat-val ${eventPct >= 0 ? 'pos' : 'neg'}">${eventPct >= 0 ? '+' : ''}${eventPct}%</span>
+          </div>
+        </div>
+        ${specialBadge}
+      </div>`;
+    }).join('');
 
+    const panelBodyClass = isGrowth ? 'panel-body panel-unlocked' : 'panel-body';
     return `
     <div id="right-panel" class="panel">
-      <div class="panel-header">意思決定リソース</div>
-      <div class="panel-body">
+      <div class="panel-header">意思決定リソース${isGrowth ? ' 🔓' : ''}</div>
+      <div class="${panelBodyClass}">
         <div class="section-title">🌊 海域</div>${areasHtml}
         <div class="section-title">⚙️ 漁法</div>${methodsHtml}
         <div class="section-title">👨‍✈️ 漁師</div>${fishermenHtml}
@@ -434,24 +514,78 @@ export class App {
     document.querySelectorAll('[data-area]').forEach(el => {
       el.addEventListener('click', () => {
         const areaId = (el as HTMLElement).dataset.area!;
+        if (!this.state.unlockedAreas.includes(areaId)) return;
+        if (isAreaRestricted(this.state, areaId)) return;
         audioManager.playSE('select');
-        this.setState(s => ({ ...s, selectedAreaId: areaId }));
+        // 全再レンダリングを避けるためDOMを直接更新
+        this.state = { ...this.state, selectedAreaId: areaId };
+        this.refreshAreaClasses(areaId);
+        this.refreshMethodClasses();
+        this.refreshCenterPanel();
       });
     });
     document.querySelectorAll('[data-method]').forEach(el => {
       el.addEventListener('click', () => {
         const methodId = (el as HTMLElement).dataset.method!;
+        if (!this.state.unlockedMethods.includes(methodId)) return;
+        if (isMethodRestricted(this.state, methodId)) return;
         audioManager.playSE('select');
-        this.setState(s => ({ ...s, selectedMethodId: methodId }));
+        this.state = { ...this.state, selectedMethodId: methodId };
+        this.refreshMethodClasses();
+        this.refreshCenterPanel();
       });
     });
     document.querySelectorAll('[data-fisher]').forEach(el => {
       el.addEventListener('click', () => {
         const fisherId = (el as HTMLElement).dataset.fisher!;
         audioManager.playSE('select');
-        this.setState(s => ({ ...s, selectedFishermanId: fisherId }));
+        this.state = { ...this.state, selectedFishermanId: fisherId };
+        // 漁師は中央パネルに影響しないのでクラス更新のみ
+        document.querySelectorAll('[data-fisher]').forEach(f => {
+          const fId = (f as HTMLElement).dataset.fisher!;
+          f.classList.toggle('selected', fId === fisherId);
+        });
       });
     });
+  }
+
+  // 海域選択クラス更新（DOM直接操作、再レンダリングなし）
+  private refreshAreaClasses(selectedId: string) {
+    document.querySelectorAll('[data-area]').forEach(el => {
+      const areaId = (el as HTMLElement).dataset.area!;
+      el.classList.toggle('selected', areaId === selectedId);
+    });
+  }
+
+  // 漁法クラス更新（選択海域との適合性も反映）
+  private refreshMethodClasses() {
+    const selectedArea = FISHING_AREAS.find(a => a.id === this.state.selectedAreaId);
+    document.querySelectorAll('[data-method]').forEach(el => {
+      const methodId = (el as HTMLElement).dataset.method!;
+      const unlocked = this.state.unlockedMethods.includes(methodId);
+      const restricted = isMethodRestricted(this.state, methodId);
+      const applicable = !selectedArea || selectedArea.availableMethods.includes(methodId);
+      const isLocked = !unlocked || restricted || (!applicable && !!selectedArea);
+
+      el.classList.toggle('selected', methodId === this.state.selectedMethodId && !isLocked);
+      el.classList.toggle('locked', isLocked);
+      (el as HTMLElement).style.pointerEvents = (!unlocked || restricted || (!applicable && !!selectedArea)) ? 'none' : '';
+
+      // 不適合になった選択中漁法をクリア
+      if (isLocked && methodId === this.state.selectedMethodId) {
+        this.state = { ...this.state, selectedMethodId: null };
+        el.classList.remove('selected');
+      }
+    });
+  }
+
+  // 中央パネルのみ再レンダリング（右パネルは触らない）
+  private refreshCenterPanel() {
+    const cp = document.getElementById('center-panel');
+    if (cp) {
+      cp.innerHTML = this.renderCenterPanel();
+      this.bindCenterPanel();
+    }
   }
 
   // ========================================
@@ -614,6 +748,16 @@ export class App {
           </div>` : ''}
         </div>
         ${previewHtml}
+        ${this.state.currentChallenge ? `
+        <div class="challenge-card">
+          <div class="challenge-badge-row">
+            <span class="challenge-badge">📋 月間チャレンジ</span>
+            ${this.state.currentChallenge.completed ? '<span class="challenge-done">✅ 達成！</span>' : ''}
+          </div>
+          <div class="challenge-title">${this.state.currentChallenge.title}</div>
+          <div class="challenge-desc">${this.state.currentChallenge.description}</div>
+          <div class="challenge-reward">🎁 <span style="color:var(--accent-gold)">¥${this.state.currentChallenge.rewardMoney.toLocaleString()}</span> + 評判<span style="color:var(--accent-green)">+${this.state.currentChallenge.rewardRep}</span></div>
+        </div>` : ''}
         ` : `
         <div class="decision-section" style="background:rgba(244,162,97,0.05);border-color:rgba(244,162,97,0.3)">
           <div style="font-size:0.8rem;color:var(--accent-gold)">
@@ -726,6 +870,13 @@ export class App {
         </div>
         ${eventLogs ? `<div class="mb-8">${eventLogs}</div>` : ''}
         `}
+        ${this.state.currentChallenge ? `
+        <div class="challenge-result-card ${this.state.currentChallenge.completed ? 'success' : 'fail'}">
+          <div style="font-weight:700">${this.state.currentChallenge.title}</div>
+          ${this.state.currentChallenge.completed
+            ? `<div style="color:var(--accent-green);font-size:0.85rem">✅ チャレンジ達成！ ¥${this.state.currentChallenge.rewardMoney.toLocaleString()} + 評判+${this.state.currentChallenge.rewardRep} を獲得</div>`
+            : `<div style="color:var(--text-muted);font-size:0.82rem">❌ チャレンジ未達成：${this.state.currentChallenge.description}</div>`}
+        </div>` : ''}
         <button id="to-news-btn" class="next-btn">ニュースを確認 →</button>
       </div>
     </div>`;
@@ -760,7 +911,13 @@ export class App {
   }
 
   private bindResult() {
-    document.getElementById('to-news-btn')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => setPhase(s, 'NEWS')); });
+    document.getElementById('to-news-btn')?.addEventListener('click', () => {
+      audioManager.playSE('click');
+      // 暗転なしでニュースへ遷移（中央パネルのみ更新）
+      this.state = setPhase(this.state, 'NEWS');
+      audioManager.switchScene(this.getBGMScene('NEWS'));
+      this.refreshCenterPanel();
+    });
   }
 
   // ---- ニュース ----
@@ -782,15 +939,26 @@ export class App {
   }
 
   private bindNews() {
-    document.getElementById('to-growth-btn')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => checkGrowth(s)); });
+    document.getElementById('to-growth-btn')?.addEventListener('click', () => {
+      audioManager.playSE('click');
+      // 暗転なしで成長画面へ遷移（中央パネルのみ更新）
+      this.state = checkGrowth(this.state);
+      audioManager.switchScene(this.getBGMScene('GROWTH'));
+      this.refreshCenterPanel();
+    });
   }
 
   // ---- 成長・解放 ----
   private renderGrowth(): string {
     const { level, unlockedAreas, unlockedMethods, upgrades, money, monthHistory } = this.state;
     const prevResult = monthHistory[monthHistory.length - 1];
-    const newAreas = unlockedAreas.filter(id => FISHING_AREAS.find(a => a.id === id)?.unlockLevel === level);
-    const newMethods = unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level);
+    // 今回レベルアップで初めて解放されたもの（Lv1初期解放は除外）
+    const newAreas = level > 1
+      ? unlockedAreas.filter(id => FISHING_AREAS.find(a => a.id === id)?.unlockLevel === level)
+      : [];
+    const newMethods = level > 1
+      ? unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level)
+      : [];
     const availableUpgrades = upgrades.filter(u => !u.purchased && u.unlockLevel <= level);
 
     return `
@@ -845,7 +1013,19 @@ export class App {
       btn.addEventListener('click', () => {
         const upgradeId = (btn as HTMLElement).dataset.upgrade!;
         audioManager.playSE('coin');
-        this.setState(s => purchaseUpgrade(s, upgradeId));
+        this.state = purchaseUpgrade(this.state, upgradeId);
+        // 再描画なし — ボタン・カードをその場で無効化
+        const card = (btn as HTMLElement).closest('.upgrade-card') as HTMLElement;
+        if (card) {
+          card.style.opacity = '0.45';
+          card.style.pointerEvents = 'none';
+          const btnEl = card.querySelector('button') as HTMLButtonElement | null;
+          if (btnEl) { btnEl.textContent = '✅ 購入済み'; btnEl.disabled = true; }
+        }
+        const headerMoney = document.querySelector<HTMLElement>('#header span[style*="accent-gold"]');
+        if (headerMoney) headerMoney.textContent = `¥${this.state.money.toLocaleString()}`;
+        const leftMoney = document.querySelector<HTMLElement>('#left-panel .money');
+        if (leftMoney) leftMoney.textContent = `¥${this.state.money.toLocaleString()}`;
       });
     });
     document.getElementById('next-month-btn')?.addEventListener('click', () => {
@@ -899,7 +1079,7 @@ export class App {
       return `<div class="${cls}">${d}${isEventDay && !isEventDone ? '<span style="position:absolute;top:-2px;right:-2px;width:5px;height:5px;background:var(--accent-gold);border-radius:50%"></span>' : ''}</div>`;
     }).join('');
 
-    const eventDots = Array.from({ length: GAME_CONFIG.MAX_EVENTS_PER_MONTH }, (_, i) =>
+    const eventDots = Array.from({ length: totalEvents }, (_, i) =>
       `<div class="event-dot ${i < firedCount ? 'fired' : ''}"></div>`).join('');
 
     // 天候エフェクト
@@ -1096,20 +1276,129 @@ export class App {
     document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
       btn.addEventListener('click', () => {
         const option = event.template.options[i];
-        // フィードバック演出
-        const flash = document.createElement('div');
-        flash.className = 'event-result-flash';
-        const hasGain = (option.effect.moneyDelta || 0) > 0 || (option.effect.yieldMultiplier || 1) > 1;
-        flash.innerHTML = `<span class="event-result-text" style="color:${hasGain ? 'var(--accent-gold)' : 'var(--text-secondary)'}">
-          ${hasGain ? '✨ 好判断！' : '👊 決断した！'}
-        </span>`;
-        document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 600);
-        audioManager.playSE('decision');
-        this.setState(s => resolveEvent(s, option));
-        // setState が phase='RUNNING' を検知して自動的に startRunning() を呼ぶため、ここでは不要
+        this.showRoulette(option, (success) => {
+          this.setState(s => resolveEvent(s, option, success));
+        });
       });
     });
+  }
+
+  // ========================================
+  // ルーレット抽選（ニードル回転方式）
+  // ========================================
+  private showRoulette(option: EventOption, callback: (success: boolean) => void) {
+    const successRates: Record<string, number> = { low: 0.70, medium: 0.50, high: 0.10 };
+    const baseRate = successRates[option.risk] ?? 0.5;
+
+    const fisherman = this.state.fishermen.find(f => f.id === this.state.selectedFishermanId);
+    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + (fisherman?.eventBonus ?? 0)));
+    const finalSuccess = Math.random() < adjustedRate;
+
+    const greenPct = Math.round(adjustedRate * 100);
+    const redPct = 100 - greenPct;
+    const greenEndDeg = adjustedRate * 360;
+
+    // ニードル方式: ディスク固定、針が回転
+    // 針の最終角度 = 結果ゾーン内のランダム位置 + 何周かのスピン
+    const spins = 4 + Math.floor(Math.random() * 3);
+    let sectorAngle: number;
+    if (finalSuccess) {
+      // 緑ゾーン: 0° 〜 greenEndDeg
+      const margin = Math.max(5, greenEndDeg * 0.08);
+      sectorAngle = margin + Math.random() * (greenEndDeg - 2 * margin);
+    } else {
+      // 赤ゾーン: greenEndDeg 〜 360°
+      const redDeg = 360 - greenEndDeg;
+      const margin = Math.max(5, redDeg * 0.08);
+      sectorAngle = greenEndDeg + margin + Math.random() * (redDeg - 2 * margin);
+    }
+    const finalNeedleAngle = spins * 360 + sectorAngle;
+    const spinDuration = 2.0 + spins * 0.25;
+
+    const riskLabel = option.risk === 'low' ? '低リスク' : option.risk === 'medium' ? '中リスク' : '⚠️ 高リスク';
+    const fisherBonus = fisherman && fisherman.eventBonus !== 0
+      ? `<span class="roulette-fisher-bonus ${fisherman.eventBonus > 0 ? 'positive' : 'negative'}">${fisherman.name.split('（')[0]}: ${fisherman.eventBonus > 0 ? '+' : ''}${Math.round(fisherman.eventBonus * 100)}%補正</span>`
+      : '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'roulette-overlay';
+    overlay.innerHTML = `
+    <div class="roulette-modal">
+      <div class="roulette-title">🎯 ルーレット抽選</div>
+      <div class="roulette-info-row">
+        <span class="risk-badge ${option.risk}">${riskLabel}</span>
+        <span class="roulette-rates"><span class="rate-success">成功 ${greenPct}%</span> / <span class="rate-fail">失敗 ${redPct}%</span></span>
+        ${fisherBonus}
+      </div>
+      <div class="roulette-wheel-area">
+        <div class="roulette-static-pointer">▼</div>
+        <div class="roulette-disc"
+          style="background: conic-gradient(#2ec4b6 0deg ${greenEndDeg}deg, #e63946 ${greenEndDeg}deg 360deg)">
+          <div class="roulette-disc-inner"></div>
+          ${greenPct >= 10 ? `<div class="roulette-sector-label" style="transform:translate(-50%,-50%) rotate(${greenEndDeg/2}deg) translateY(-38px) rotate(-${greenEndDeg/2}deg)">✅ ${greenPct}%</div>` : ''}
+          ${redPct >= 10 ? `<div class="roulette-sector-label fail-sl" style="transform:translate(-50%,-50%) rotate(${greenEndDeg + (360-greenEndDeg)/2}deg) translateY(-38px) rotate(-${greenEndDeg + (360-greenEndDeg)/2}deg)">❌ ${redPct}%</div>` : ''}
+        </div>
+        <div class="roulette-needle" id="roulette-needle"></div>
+        <div class="roulette-center-cap"></div>
+      </div>
+      <div class="roulette-result" id="roulette-result"></div>
+      <button class="roulette-confirm-btn" id="roulette-confirm" style="display:none">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    audioManager.playSE('event');
+
+    // ティック音（スピン加速→減速に合わせた間隔）
+    const tickTimes = [0, 90, 170, 260, 380, 530, 720, 960, 1260, 1620, 2040];
+    tickTimes.filter(t => t < spinDuration * 900).forEach(t => {
+      setTimeout(() => audioManager.playSE('roulette-tick'), 200 + t);
+    });
+
+    // 針スピン開始
+    setTimeout(() => {
+      const needle = document.getElementById('roulette-needle');
+      if (!needle) return;
+      needle.style.transition = `transform ${spinDuration}s cubic-bezier(0.17, 0.67, 0.12, 0.99)`;
+      needle.style.transform = `rotate(${finalNeedleAngle}deg)`;
+    }, 200);
+
+    // 結果表示
+    setTimeout(() => {
+      const resultEl = document.getElementById('roulette-result');
+      const confirmBtn = document.getElementById('roulette-confirm');
+      if (!resultEl || !confirmBtn) return;
+
+      const discEl = overlay.querySelector('.roulette-disc') as HTMLElement | null;
+      if (finalSuccess) {
+        audioManager.playSE('roulette-success');
+        const desc = this.describeEffect(option.effect);
+        resultEl.innerHTML = `<div class="roulette-success">✅ 成功！<div class="roulette-effect-desc">${desc}</div></div>`;
+        discEl?.classList.add('result-success-glow');
+      } else {
+        audioManager.playSE('roulette-fail');
+        const failEff = option.failureEffect ?? option.effect;
+        const desc = this.describeEffect(failEff);
+        resultEl.innerHTML = `<div class="roulette-failure">❌ 失敗...<div class="roulette-effect-desc">${desc}</div></div>`;
+        discEl?.classList.add('result-fail-glow');
+      }
+      resultEl.classList.add('visible');
+      confirmBtn.style.display = 'block';
+      confirmBtn.addEventListener('click', () => {
+        overlay.remove();
+        callback(finalSuccess);
+      });
+    }, (spinDuration + 0.4) * 1000 + 200);
+  }
+
+  private describeEffect(eff: EventEffect): string {
+    const parts: string[] = [];
+    if (eff.moneyDelta) parts.push(`${eff.moneyDelta >= 0 ? '+' : ''}¥${eff.moneyDelta.toLocaleString()}`);
+    if (eff.yieldMultiplier && eff.yieldMultiplier !== 1.0) {
+      const pct = Math.round((eff.yieldMultiplier - 1) * 100);
+      parts.push(`水揚げ${pct >= 0 ? '+' : ''}${pct}%`);
+    }
+    if (eff.reputationDelta) parts.push(`評判${eff.reputationDelta >= 0 ? '+' : ''}${eff.reputationDelta}`);
+    return parts.length > 0 ? parts.join(' / ') : '影響なし';
   }
 
   // ========================================
@@ -1164,6 +1453,149 @@ export class App {
     document.getElementById('share-btn')?.addEventListener('click', () => {
       const text = `【石川漁業シミュレーション】\n${this.state.companyName} スコア: ${score.toLocaleString()}pt\n難易度: ${this.state.difficulty === 'hard' ? 'ハード' : 'ノーマル'} Lv.${this.state.level}`;
       navigator.clipboard.writeText(text).catch(() => prompt('結果テキスト:', text));
+    });
+  }
+
+  // ========================================
+  // プロローグ
+  // ========================================
+  private renderPrologue(): string {
+    const slide = PROLOGUE_SLIDES[this.state.prologueSlide] ?? PROLOGUE_SLIDES[0];
+    const char = CHARACTERS.find(c => c.id === slide.character);
+    const isLast = this.state.prologueSlide >= PROLOGUE_SLIDES.length - 1;
+    const dots = PROLOGUE_SLIDES.map((_, i) =>
+      `<span class="prologue-dot${i === this.state.prologueSlide ? ' active' : ''}"></span>`
+    ).join('');
+
+    return `
+    <div class="prologue-overlay">
+      <div class="prologue-scene">
+        <div class="prologue-ocean-bg">${slide.bgEmoji}</div>
+        <div class="prologue-dialogue" style="border-color: ${char?.color ?? '#4fc3f7'}60">
+          <div class="prologue-portrait">${char?.portrait ?? '📜'}</div>
+          <div class="prologue-text-area">
+            <div class="prologue-char-name" style="color: ${char?.color ?? '#4fc3f7'}">${char?.name ?? ''}</div>
+            ${char?.role ? `<div class="prologue-char-role">${char.role}</div>` : ''}
+            <div class="prologue-title">${slide.title}</div>
+            <div class="prologue-lines">
+              ${slide.lines.map(l => `<p>${l}</p>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="prologue-controls">
+          <div class="prologue-dots">${dots}</div>
+          <div class="prologue-btns">
+            <button id="prologue-skip-btn" class="prologue-skip-btn">スキップ</button>
+            <button id="prologue-next-btn" class="prologue-next-btn">
+              ${isLast ? '会社を立ち上げる ⛵' : '次へ →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  private bindPrologue() {
+    document.getElementById('prologue-next-btn')?.addEventListener('click', () => {
+      const nextSlide = this.state.prologueSlide + 1;
+      if (nextSlide >= PROLOGUE_SLIDES.length) {
+        this.setState(s => ({ ...s, phase: 'SETUP' as const }));
+      } else {
+        this.setState(s => ({ ...s, prologueSlide: nextSlide }));
+      }
+    });
+    document.getElementById('prologue-skip-btn')?.addEventListener('click', () => {
+      this.setState(s => ({ ...s, phase: 'SETUP' as const }));
+    });
+  }
+
+  // ========================================
+  // ストーリービートモーダル
+  // ========================================
+  private renderStoryBeatModal(beat: StoryBeat): string {
+    const char = CHARACTERS.find(c => c.id === beat.character);
+    return `
+    <div class="story-modal-overlay">
+      <div class="story-modal" style="border-color: ${char?.color ?? '#4fc3f7'}">
+        <div class="story-modal-header" style="background: ${char?.color ?? '#4fc3f7'}18; border-bottom: 1px solid ${char?.color ?? '#4fc3f7'}50">
+          <span class="story-portrait">${char?.portrait ?? '📖'}</span>
+          <div class="story-char-info">
+            <span class="story-char-name">${char?.name ?? ''}</span>
+            <span class="story-char-role">${char?.role ?? ''}</span>
+          </div>
+          <span class="story-month-badge">${this.state.month}月</span>
+        </div>
+        <div class="story-modal-body">
+          ${beat.lines.map(l => `<p class="story-line">${l}</p>`).join('')}
+        </div>
+        <button id="story-close-btn" class="story-close-btn">理解した！漁へ出よう ⛵</button>
+      </div>
+    </div>`;
+  }
+
+  private bindStoryBeat() {
+    document.getElementById('story-close-btn')?.addEventListener('click', () => {
+      this.setState(s => ({ ...s, storyBeatSeen: true }));
+    });
+  }
+
+  // ========================================
+  // チュートリアルオーバーレイ
+  // ========================================
+  private renderTutorialOverlay(): string {
+    const { tutorialStep } = this.state;
+    if (tutorialStep <= 0) return '';
+    // フェーズがスキップされた場合、現在フェーズに対応する最初のステップに自動進行
+    const step = TUTORIAL_STEPS.find(s => s.id >= tutorialStep && s.phase === this.state.phase);
+    if (!step) return '';
+    if (step.id !== tutorialStep) {
+      this.state = { ...this.state, tutorialStep: step.id };
+    }
+    const char = CHARACTERS.find(c => c.id === step.character);
+    const isLast = step.id === TUTORIAL_STEPS.length;
+    return `
+    <div id="tutorial-overlay" class="tutorial-overlay">
+      <div class="tutorial-tooltip">
+        <div class="tutorial-portrait">${char?.portrait ?? '💬'}</div>
+        <div class="tutorial-content">
+          <div class="tutorial-header">
+            <span class="tutorial-char-name">${char?.name ?? ''}</span>
+            <span class="tutorial-badge">チュートリアル ${step.id}/${TUTORIAL_STEPS.length}</span>
+          </div>
+          <div class="tutorial-lines">
+            ${step.lines.map(l => `<p>${l}</p>`).join('')}
+          </div>
+        </div>
+        <button id="tutorial-next-btn" class="tutorial-next-btn">
+          ${isLast ? '完了！' : 'わかった'}
+        </button>
+      </div>
+    </div>`;
+  }
+
+  private appendTutorialOverlay() {
+    const html = this.renderTutorialOverlay();
+    if (!html) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    const el = wrapper.firstElementChild;
+    if (el) {
+      this.root.appendChild(el);
+      this.bindTutorial();
+    }
+  }
+
+  private bindTutorial() {
+    document.getElementById('tutorial-next-btn')?.addEventListener('click', () => {
+      const next = this.state.tutorialStep + 1;
+      const newStep = next > TUTORIAL_STEPS.length ? -1 : next;
+      // RUNNING/EVENT フェーズはアニメーション・モーダルを維持するため DOM直接操作
+      if (this.state.phase === 'RUNNING' || this.state.phase === 'EVENT') {
+        this.state = { ...this.state, tutorialStep: newStep };
+        document.getElementById('tutorial-overlay')?.remove();
+        return;
+      }
+      this.setState(s => ({ ...s, tutorialStep: newStep }));
     });
   }
 

@@ -4,6 +4,7 @@
 
 export type GamePhase =
   | 'INIT'
+  | 'PROLOGUE'
   | 'SETUP'
   | 'MONTH_START'
   | 'DECISION'
@@ -109,7 +110,8 @@ export interface EventOption {
   label: string;
   description: string;
   risk: 'low' | 'medium' | 'high';
-  effect: EventEffect;
+  effect: EventEffect;           // 成功時エフェクト
+  failureEffect?: EventEffect;   // 失敗時エフェクト（未指定の場合はeffectを劣化版で適用）
 }
 
 export interface EventEffect {
@@ -125,6 +127,7 @@ export interface ScheduledEvent {
   template: EventTemplate;
   resolved: boolean;
   chosenOption?: EventOption;
+  wasSuccess?: boolean;          // ルーレット結果（true=成功, false=失敗）
 }
 
 // ========================================
@@ -187,6 +190,18 @@ export interface LearningBonus {
 }
 
 // ========================================
+// 月間チャレンジ（Lv3以上で毎月発生）
+// ========================================
+export interface ActiveChallenge {
+  id: string;
+  title: string;
+  description: string;
+  rewardMoney: number;
+  rewardRep: number;
+  completed: boolean;
+}
+
+// ========================================
 // ログエントリ
 // ========================================
 export interface LogEntry {
@@ -244,4 +259,12 @@ export interface GameState {
   // 集計
   totalProfit: number;
   totalRevenue: number;
+
+  // 月間チャレンジ
+  currentChallenge: ActiveChallenge | null;
+
+  // ストーリー・チュートリアル
+  prologueSlide: number;    // プロローグの現在スライド番号
+  storyBeatSeen: boolean;   // 今月のストーリーを既読か
+  tutorialStep: number;     // 0=未開始, 1-8=実行中, -1=完了
 }

@@ -4,11 +4,12 @@
 
 import type {
   GameState, GamePhase, Weather, MonthResult, CatchRecord,
-  ScheduledEvent, EventOption, LearningBonus, LogEntry,
+  ScheduledEvent, EventOption, LearningBonus, LogEntry, ActiveChallenge,
 } from './types';
 import {
   FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN,
   UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG, DIFFICULTY_CONFIG,
+  CHALLENGE_TEMPLATES,
 } from './data';
 import type { Difficulty } from './types';
 
@@ -53,7 +54,40 @@ export function createInitialState(): GameState {
     learningBonuses: [],
     totalProfit: 0,
     totalRevenue: 0,
+
+    prologueSlide: 0,
+    storyBeatSeen: false,
+    tutorialStep: 0,
+    currentChallenge: null,
   };
+}
+
+// ----------------------------------------
+// 月間チャレンジ
+// ----------------------------------------
+function generateChallenge(level: number, weather: Weather): ActiveChallenge | null {
+  if (level < 3) return null;
+  const eligible = CHALLENGE_TEMPLATES.filter(c => {
+    if (c.minLevel > level) return false;
+    // storm-hero は荒天の月にのみ出題
+    if (c.id === 'storm-hero' && weather !== 'stormy') return false;
+    return true;
+  });
+  if (eligible.length === 0) return null;
+  const t = eligible[Math.floor(Math.random() * eligible.length)];
+  return { ...t, completed: false };
+}
+
+function checkChallengeCompleted(id: string, result: MonthResult, state: GameState): boolean {
+  switch (id) {
+    case 'big-haul':        return result.profit >= 500_000;
+    case 'storm-hero':      return result.weather === 'stormy' && result.profit > 0;
+    case 'event-ace':       return result.events.length >= 1 && result.events.every(e => e.resolved);
+    case 'million-revenue': return result.totalRevenue >= 1_000_000;
+    case 'rare-catch':      return result.catches.some(c => ['nodoguro', 'awabi'].includes(c.fishId));
+    case 'mega-profit':     return result.profit >= 1_000_000;
+    default: return false;
+  }
 }
 
 // ----------------------------------------
@@ -73,6 +107,8 @@ export function startGame(state: GameState): GameState {
     money: dc.initialMoney,
     interestRate: dc.interestRate,
     phase: 'MONTH_START',
+    tutorialStep: 1,
+    storyBeatSeen: false,
   });
 }
 
@@ -84,6 +120,7 @@ export function startMonth(state: GameState): GameState {
   const regulations = REGULATIONS.filter(r => r.month === state.month);
   const newsTemplate = NEWS_TEMPLATES.find(n => n.month === state.month);
   const news = newsTemplate ? newsTemplate.items : [];
+  const challenge = generateChallenge(state.level, weather);
 
   return {
     ...state,
@@ -91,6 +128,7 @@ export function startMonth(state: GameState): GameState {
     currentWeather: weather,
     currentRegulations: regulations,
     currentNews: news,
+    currentChallenge: challenge,
     selectedAreaId: null,
     selectedMethodId: null,
     isResting: false,
@@ -98,6 +136,7 @@ export function startMonth(state: GameState): GameState {
     scheduledEvents: [],
     currentEventIndex: 0,
     monthResult: null,
+    storyBeatSeen: false,
   };
 }
 
@@ -134,7 +173,8 @@ export function prepareOperation(state: GameState): GameState {
     return { ...state, scheduledEvents: [], currentEventIndex: 0 };
   }
 
-  const eventCount = Math.floor(Math.random() * (GAME_CONFIG.MAX_EVENTS_PER_MONTH + 1));
+  // 最低1件のイベントを保証（ノーマル含む全難易度）
+  const eventCount = 1 + Math.floor(Math.random() * GAME_CONFIG.MAX_EVENTS_PER_MONTH);
   const days = pickUniqueDays(eventCount, 3, 27); // 3日〜27日にランダム配置
   const templates = pickRandomEventTemplates(eventCount, state);
 
@@ -194,36 +234,49 @@ export function advanceDay(state: GameState): { state: GameState; eventFired: bo
 }
 
 // ----------------------------------------
-// イベント選択適用
+// イベント選択適用（ルーレット結果付き）
 // ----------------------------------------
-export function resolveEvent(state: GameState, option: EventOption): GameState {
+export function resolveEvent(state: GameState, option: EventOption, success: boolean): GameState {
   const events = [...state.scheduledEvents];
   const idx = state.currentEventIndex;
+
+  // 成功/失敗に応じたエフェクトを決定
+  const appliedEffect = success || !option.failureEffect ? option.effect : option.failureEffect;
+
   const resolvedEvent: ScheduledEvent = {
     ...events[idx],
     resolved: true,
-    chosenOption: option,
+    chosenOption: { ...option, effect: appliedEffect }, // 適用エフェクトを保存
+    wasSuccess: success,
   };
   events[idx] = resolvedEvent;
 
   let money = state.money;
-  if (option.effect.moneyDelta) {
-    money += option.effect.moneyDelta;
+  if (appliedEffect.moneyDelta) {
+    money += appliedEffect.moneyDelta;
   }
 
+  // 評判変動
+  let reputation = state.reputation;
+  if (appliedEffect.reputationDelta) {
+    reputation = Math.max(0, Math.min(100, reputation + appliedEffect.reputationDelta));
+  }
+
+  const resultLabel = success ? '✅成功' : '❌失敗';
   const log: LogEntry[] = [
     ...state.log,
     {
       month: state.month,
       day: events[idx].day,
       type: 'event',
-      text: `【${events[idx].template.title}】${option.label}を選択`,
+      text: `【${events[idx].template.title}】${option.label} → ${resultLabel}`,
     },
   ];
 
   return {
     ...state,
     money,
+    reputation,
     scheduledEvents: events,
     currentEventIndex: idx + 1,
     phase: 'RUNNING',
@@ -264,6 +317,17 @@ export function finishMonth(state: GameState): GameState {
   const newBonuses = deriveNewLearningBonuses(result, state.learningBonuses);
   learningBonuses.push(...newBonuses);
 
+  // 月間チャレンジ達成チェック
+  let currentChallenge = state.currentChallenge;
+  let challengeRepBonus = 0;
+  if (currentChallenge && !currentChallenge.completed && !state.isResting) {
+    if (checkChallengeCompleted(currentChallenge.id, result, state)) {
+      currentChallenge = { ...currentChallenge, completed: true };
+      money += currentChallenge.rewardMoney;
+      challengeRepBonus = currentChallenge.rewardRep;
+    }
+  }
+
   const log: LogEntry[] = [
     ...state.log,
     {
@@ -279,12 +343,14 @@ export function finishMonth(state: GameState): GameState {
     money,
     debt,
     debtTurnsLeft,
+    reputation: Math.min(100, state.reputation + challengeRepBonus),
     monthResult: result,
     totalProfit,
     totalRevenue,
     level: newLevel,
     monthHistory: [...state.monthHistory, result],
     learningBonuses,
+    currentChallenge,
     log,
   };
 }
@@ -490,28 +556,23 @@ function deriveNewLearningBonuses(result: MonthResult, existing: LearningBonus[]
 // 成長・解放判定
 // ----------------------------------------
 export function checkGrowth(state: GameState): GameState {
-  const newLevel = calcLevel(state.totalProfit);
-  const levelUp = newLevel > state.level;
+  // finishMonthで既にlevelは更新済みのため、現在レベルに対応する解放を必ず実行する
   let unlockedAreas = [...state.unlockedAreas];
   let unlockedMethods = [...state.unlockedMethods];
 
-  if (levelUp || newLevel !== state.level) {
-    // 解放チェック
-    FISHING_AREAS.forEach(area => {
-      if (area.unlockLevel <= newLevel && !unlockedAreas.includes(area.id)) {
-        unlockedAreas.push(area.id);
-      }
-    });
-    FISHING_METHODS.forEach(method => {
-      if (method.unlockLevel <= newLevel && !unlockedMethods.includes(method.id)) {
-        unlockedMethods.push(method.id);
-      }
-    });
-  }
+  FISHING_AREAS.forEach(area => {
+    if (area.unlockLevel <= state.level && !unlockedAreas.includes(area.id)) {
+      unlockedAreas.push(area.id);
+    }
+  });
+  FISHING_METHODS.forEach(method => {
+    if (method.unlockLevel <= state.level && !unlockedMethods.includes(method.id)) {
+      unlockedMethods.push(method.id);
+    }
+  });
 
   return {
     ...state,
-    level: newLevel,
     unlockedAreas,
     unlockedMethods,
     phase: 'GROWTH',
@@ -548,6 +609,7 @@ export function proceedToNextMonth(state: GameState): GameState {
     scheduledEvents: [],
     currentEventIndex: 0,
     monthResult: null,
+    storyBeatSeen: false,
   };
 }
 

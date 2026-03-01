@@ -4,7 +4,7 @@
 // 卸値: 石川県水産物卸値データ
 // ========================================
 
-import type { FishingArea, FishingMethod, FishSpecies, Fisherman, Upgrade, EventTemplate, Regulation, NewsItem } from './types';
+import type { FishingArea, FishingMethod, FishSpecies, Fisherman, Upgrade, EventTemplate, Regulation, NewsItem, ActiveChallenge } from './types';
 
 // ----------------------------------------
 // 海域定義（5海域）
@@ -443,13 +443,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '港に戻り修理する',
         description: '修理費はかかるが安全。今月の漁は短縮。',
         risk: 'low',
-        effect: { moneyDelta: -150000, yieldMultiplier: 0.6 },
+        effect: { moneyDelta: -80000, yieldMultiplier: 0.75 },
+        failureEffect: { moneyDelta: -280000, yieldMultiplier: 0.5 },
       },
       {
         label: 'このまま続ける',
         description: '成功すれば問題なし。失敗すれば大損害。',
         risk: 'high',
-        effect: { moneyDelta: -50000, yieldMultiplier: 0.9 },
+        effect: { moneyDelta: 0, yieldMultiplier: 1.05 },
+        failureEffect: { moneyDelta: -550000, yieldMultiplier: 0.2 },
       },
     ],
   },
@@ -462,13 +464,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '時間外操業する',
         description: '人件費増だが水揚げ増が期待できる。',
         risk: 'medium',
-        effect: { moneyDelta: -80000, yieldMultiplier: 1.4 },
+        effect: { moneyDelta: -80000, yieldMultiplier: 1.55 },
+        failureEffect: { moneyDelta: -160000, yieldMultiplier: 0.85 },
       },
       {
         label: '断って通常操業',
         description: '余計なコストはかけない。',
         risk: 'low',
-        effect: { yieldMultiplier: 1.0 },
+        effect: { yieldMultiplier: 1.05 },
+        failureEffect: { yieldMultiplier: 0.9 },
       },
     ],
   },
@@ -481,13 +485,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '今すぐ売る',
         description: '確実に現金化できる。',
         risk: 'low',
-        effect: { yieldMultiplier: 1.0 },
+        effect: { moneyDelta: 50000, yieldMultiplier: 1.0 },
+        failureEffect: { moneyDelta: -20000, yieldMultiplier: 1.0 },
       },
       {
         label: '来週まで待つ',
         description: '成功すれば高値売り。失敗すれば鮮度低下で損。',
         risk: 'high',
-        effect: { moneyDelta: 200000, yieldMultiplier: 0.9 },
+        effect: { moneyDelta: 350000, yieldMultiplier: 1.0 },
+        failureEffect: { moneyDelta: -100000, yieldMultiplier: 0.7 },
       },
     ],
   },
@@ -500,13 +506,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '即座に帰港する',
         description: '安全第一。今月の漁は短縮。',
         risk: 'low',
-        effect: { yieldMultiplier: 0.5 },
+        effect: { yieldMultiplier: 0.62 },
+        failureEffect: { moneyDelta: -50000, yieldMultiplier: 0.52 },
       },
       {
         label: '粘って漁を続ける',
         description: '嵐が来なければ高水揚げ。来れば危険。',
         risk: 'high',
-        effect: { yieldMultiplier: 1.3 },
+        effect: { yieldMultiplier: 1.45 },
+        failureEffect: { moneyDelta: -450000, yieldMultiplier: 0.2 },
       },
     ],
   },
@@ -519,13 +527,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '情報に乗って移動する',
         description: 'コストがかかるが漁場が広がる可能性。',
         risk: 'medium',
-        effect: { moneyDelta: -50000, yieldMultiplier: 1.25 },
+        effect: { yieldMultiplier: 1.35 },
+        failureEffect: { moneyDelta: -70000, yieldMultiplier: 0.82 },
       },
       {
         label: '現在の海域に留まる',
         description: '余計なリスクを取らない。',
         risk: 'low',
-        effect: { yieldMultiplier: 1.0 },
+        effect: { yieldMultiplier: 1.05 },
+        failureEffect: { yieldMultiplier: 0.88 },
       },
     ],
   },
@@ -538,13 +548,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '応急処置で続行',
         description: '水揚げは減るが費用は最小限。',
         risk: 'medium',
-        effect: { yieldMultiplier: 0.75 },
+        effect: { yieldMultiplier: 0.85 },
+        failureEffect: { moneyDelta: -220000, yieldMultiplier: 0.38 },
       },
       {
         label: '帰港して修理',
         description: '修理費と漁の損失が発生。',
         risk: 'low',
-        effect: { moneyDelta: -100000, yieldMultiplier: 0.5 },
+        effect: { moneyDelta: -80000, yieldMultiplier: 0.65 },
+        failureEffect: { moneyDelta: -220000, yieldMultiplier: 0.48 },
       },
     ],
   },
@@ -557,13 +569,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '特別売りに応じる',
         description: '即座に高収益が得られる。',
         risk: 'low',
-        effect: { moneyDelta: 300000 },
+        effect: { moneyDelta: 420000 },
+        failureEffect: { moneyDelta: 80000 },
       },
       {
         label: '断って市場で売る',
         description: '量で勝負する。',
         risk: 'low',
-        effect: { yieldMultiplier: 1.1 },
+        effect: { yieldMultiplier: 1.15 },
+        failureEffect: { yieldMultiplier: 0.88 },
       },
     ],
   },
@@ -576,13 +590,15 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         label: '重要なポジションを任せる',
         description: 'うまくいけば水揚げ増。失敗すれば損失。',
         risk: 'medium',
-        effect: { yieldMultiplier: 1.3 },
+        effect: { yieldMultiplier: 1.38, reputationDelta: 5 },
+        failureEffect: { moneyDelta: -100000, yieldMultiplier: 0.78, reputationDelta: -5 },
       },
       {
         label: 'サポート役に回す',
         description: '安定した状態を保つ。',
         risk: 'low',
-        effect: { yieldMultiplier: 1.0, reputationDelta: 3 },
+        effect: { yieldMultiplier: 1.0, reputationDelta: 5 },
+        failureEffect: { yieldMultiplier: 0.95 },
       },
     ],
   },
@@ -748,3 +764,15 @@ export const DIFFICULTY_CONFIG = {
     restIncome: 0,                 // 休業しても収入ゼロ
   },
 };
+
+// ----------------------------------------
+// 月間チャレンジテンプレート（Lv3以上で毎月発生）
+// ----------------------------------------
+export const CHALLENGE_TEMPLATES: (Omit<ActiveChallenge, 'completed'>& { minLevel: number })[] = [
+  { id: 'big-haul',        title: '🏆 大漁月間',    description: '今月 ¥500,000 以上の純利益を達成する',    rewardMoney: 250_000, rewardRep: 5,  minLevel: 3 },
+  { id: 'storm-hero',      title: '⚡ 嵐の勇者',    description: '荒天の月でも黒字を達成する',              rewardMoney: 350_000, rewardRep: 8,  minLevel: 3 },
+  { id: 'event-ace',       title: '🎯 イベント達人', description: '全てのランダムイベントを解決する',        rewardMoney: 180_000, rewardRep: 6,  minLevel: 3 },
+  { id: 'million-revenue', title: '💰 百万水揚げ',  description: '水揚げ売上 ¥1,000,000 超を達成する',     rewardMoney: 300_000, rewardRep: 8,  minLevel: 4 },
+  { id: 'rare-catch',      title: '🐡 希少魚ゲット',description: 'のどぐろ か アワビ を水揚げする',         rewardMoney: 200_000, rewardRep: 10, minLevel: 4 },
+  { id: 'mega-profit',     title: '👑 百万超利益',  description: '¥1,000,000 以上の純利益を達成する',      rewardMoney: 600_000, rewardRep: 15, minLevel: 5 },
+];
