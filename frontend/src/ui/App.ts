@@ -15,8 +15,10 @@ import {
   prepareOperation, advanceDay, resolveEvent, finishMonth,
   checkGrowth, proceedToNextMonth, purchaseUpgrade, calculateScore,
   isAreaRestricted, isMethodRestricted,
+  enterCardSelect, toggleVoyageCard, confirmVoyageCards,
+  hireCrew, upgradeCrew, toggleCrewSelection, getCrewEventBonus,
 } from '../game/engine';
-import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN, GAME_CONFIG, DIFFICULTY_CONFIG } from '../game/data';
+import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, CREW_MEMBERS, GAME_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
 
 // ========================================
@@ -79,12 +81,12 @@ function spawnCoins(count: number) {
 // ========================================
 function calcExpectedProfit(
   areaId: string, methodId: string, month: number, weather: string,
-  difficulty: string, fuelReduction: number
+  fuelReduction: number
 ): { min: number; max: number; topFish: typeof FISH_SPECIES } {
   const area = FISHING_AREAS.find(a => a.id === areaId)!;
   const method = FISHING_METHODS.find(m => m.id === methodId)!;
   const validFish = FISH_SPECIES.filter(f => f.areas.includes(areaId) && f.methods.includes(methodId));
-  const dc = DIFFICULTY_CONFIG[difficulty as 'normal' | 'hard' | 'extreme'] ?? DIFFICULTY_CONFIG.normal;
+  const dc = GAME_CONFIG;
 
   const weatherMult = weather === 'sunny' ? 1.0 : weather === 'cloudy' ? 0.9 : 0.55;
   const priceVar = dc.priceVariance;
@@ -155,6 +157,7 @@ export class App {
   private getBGMScene(phase: GamePhase): BGMScene {
     switch (phase) {
       case 'INIT': case 'PROLOGUE': case 'SETUP': case 'MONTH_START': return 'exploration';
+      case 'CARD_SELECT': return 'decision';
       case 'DECISION': return 'decision';
       case 'RUNNING': case 'EVENT':
         return this.state.currentWeather === 'stormy' ? 'storm' : 'sailing';
@@ -186,6 +189,12 @@ export class App {
     if (phase === 'SETUP') {
       this.root.innerHTML = this.renderSetup();
       this.bindSetup();
+      return;
+    }
+    // 航海カード選択
+    if (phase === 'CARD_SELECT') {
+      this.root.innerHTML = this.renderCardSelect();
+      this.bindCardSelect();
       return;
     }
     // 操業中
@@ -228,6 +237,7 @@ export class App {
         <div class="setup-game-title">
           <h1>🎣 石川漁業シミュレーション</h1>
           <p class="title-sub">石川の豊かな海で、あなただけの漁業会社を育てよう。<br>12か月の判断と挑戦が始まる。</p>
+          <div class="setup-difficulty-badge">☠️ 激ムズモード固定　初期資金150万・嵐確率50%・月利15%</div>
         </div>
         <div class="setup-form">
           <div>
@@ -235,23 +245,6 @@ export class App {
             <input id="company-name-input" class="form-input" type="text"
               placeholder="例：能登漁業（株）" maxlength="20"
               value="${this.state.companyName}" />
-          </div>
-          <div>
-            <label class="form-label">難易度</label>
-            <div class="difficulty-options">
-              <div class="diff-option ${this.state.difficulty === 'normal' ? 'selected-normal' : ''}" data-diff="normal">
-                <div class="diff-name" style="color:#a5d6a7">🟢 ノーマル</div>
-                <div class="diff-desc">価格変動 ±15%・固定費25万<br>嵐確率28%・スコア×1.0</div>
-              </div>
-              <div class="diff-option ${this.state.difficulty === 'hard' ? 'selected-hard' : ''}" data-diff="hard">
-                <div class="diff-name" style="color:#ef9a9a">🔴 ハード</div>
-                <div class="diff-desc">価格変動 ±30%・固定費32万<br>嵐確率38%・スコア×2.0</div>
-              </div>
-              <div class="diff-option ${this.state.difficulty === 'extreme' ? 'selected-extreme' : ''}" data-diff="extreme">
-                <div class="diff-name" style="color:#ff6b35">☠️ 激ムズ</div>
-                <div class="diff-desc">初期資金150万・固定費42万<br>嵐確率50%・月利15%<br>ほぼ破産確定・スコア×5.0</div>
-              </div>
-            </div>
           </div>
           <button id="start-game-btn" class="setup-start-btn"
             ${this.state.companyName.trim() === '' ? 'disabled' : ''}>
@@ -269,14 +262,6 @@ export class App {
       this.state = { ...this.state, companyName: nameInput.value };
       startBtn.disabled = nameInput.value.trim() === '';
     });
-    document.querySelectorAll('.diff-option').forEach(opt => {
-      opt.addEventListener('click', () => {
-        const diff = (opt as HTMLElement).dataset.diff as 'normal' | 'hard' | 'extreme';
-        this.state = { ...this.state, difficulty: diff };
-        document.querySelectorAll('.diff-option').forEach(o => o.classList.remove('selected-normal', 'selected-hard', 'selected-extreme'));
-        opt.classList.add(diff === 'normal' ? 'selected-normal' : diff === 'hard' ? 'selected-hard' : 'selected-extreme');
-      });
-    });
     startBtn?.addEventListener('click', () => {
       if (!this.state.companyName.trim()) return;
       audioManager.resume();
@@ -284,6 +269,126 @@ export class App {
       this.bgmStarted = true;
       audioManager.playSE('decision');
       this.setState(s => startGame(s));
+    });
+  }
+
+  // ========================================
+  // 航海カード選択（CARD_SELECT フェーズ）
+  // ========================================
+  private renderCardSelect(): string {
+    const { voyageCardDeck, currentVoyageCards, month } = this.state;
+    const selectedIds = new Set(currentVoyageCards.map(c => c.id));
+    const typeColors: Record<string, string> = {
+      weather: 'card-type-weather',
+      market: 'card-type-market',
+      special: 'card-type-special',
+      risk: 'card-type-risk',
+    };
+    const rarityStars: Record<string, string> = {
+      common: '★☆☆',
+      uncommon: '★★☆',
+      rare: '★★★',
+    };
+    const rarityLabels: Record<string, string> = {
+      common: 'コモン',
+      uncommon: 'アンコモン',
+      rare: 'レア',
+    };
+
+    const cardsHtml = voyageCardDeck.map((card, i) => {
+      const isSelected = selectedIds.has(card.id);
+      const canSelect = isSelected || selectedIds.size < 3;
+      return `
+      <div class="voyage-card ${typeColors[card.type] ?? ''} ${isSelected ? 'voyage-card-selected' : ''} ${!canSelect ? 'voyage-card-disabled' : ''}"
+           data-card-id="${card.id}"
+           style="animation-delay: ${i * 0.1}s">
+        <div class="voyage-card-rarity ${card.rarity}">${rarityStars[card.rarity]}</div>
+        <div class="voyage-card-icon">${card.icon}</div>
+        <div class="voyage-card-title">${card.title}</div>
+        <div class="voyage-card-type-label">${{ weather: '天候', market: '市場', special: '特殊', risk: 'リスク' }[card.type] ?? ''} / ${rarityLabels[card.rarity]}</div>
+        <div class="voyage-card-desc">${card.description.replace(/\n/g, '<br>')}</div>
+        ${isSelected ? '<div class="voyage-card-check">✓ 選択中</div>' : ''}
+      </div>`;
+    }).join('');
+
+    const selectedCount = selectedIds.size;
+    const canConfirm = selectedCount >= 1;
+
+    return `
+    <div id="card-select-screen">
+      <div class="card-select-bg">
+        <div class="card-select-container">
+          <div class="card-select-header">
+            <div class="card-select-title">⚓ ${month}月の航海カード</div>
+            <div class="card-select-subtitle">5枚の中から3枚を選んでください。今月の漁に特別な効果をもたらします。</div>
+          </div>
+          <div class="card-select-counter">
+            <span class="counter-current">${selectedCount}</span>
+            <span class="counter-slash"> / </span>
+            <span class="counter-max">3</span>
+            <span class="counter-label"> 枚選択中</span>
+          </div>
+          <div class="voyage-cards-grid">${cardsHtml}</div>
+          <div class="card-select-actions">
+            <button id="card-select-random-btn" class="card-random-btn">
+              🎲 ランダムに選ぶ
+            </button>
+            <button id="card-select-confirm-btn" class="card-confirm-btn" ${canConfirm ? '' : 'disabled'}>
+              ${selectedCount >= 3 ? '✓ この3枚で決定！' : selectedCount > 0 ? `${selectedCount}枚選択（残り${3 - selectedCount}枚をランダム補完）` : '少なくとも1枚選んでください'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  private bindCardSelect() {
+    audioManager.playSE('decision');
+
+    document.querySelectorAll('[data-card-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        const cardId = (el as HTMLElement).dataset.cardId!;
+        audioManager.playSE('select');
+        this.state = toggleVoyageCard(this.state, cardId);
+        // DOM直接更新（フラッシュなし）
+        const selectedIds = new Set(this.state.currentVoyageCards.map(c => c.id));
+        document.querySelectorAll('[data-card-id]').forEach(card => {
+          const cid = (card as HTMLElement).dataset.cardId!;
+          const isSelected = selectedIds.has(cid);
+          const canSelect = isSelected || selectedIds.size < 3;
+          card.classList.toggle('voyage-card-selected', isSelected);
+          card.classList.toggle('voyage-card-disabled', !canSelect);
+          const check = card.querySelector('.voyage-card-check');
+          if (isSelected && !check) {
+            const div = document.createElement('div');
+            div.className = 'voyage-card-check';
+            div.textContent = '✓ 選択中';
+            card.appendChild(div);
+          } else if (!isSelected && check) {
+            check.remove();
+          }
+        });
+        const count = selectedIds.size;
+        const counterEl = document.querySelector('.counter-current');
+        if (counterEl) counterEl.textContent = String(count);
+        const confirmBtn = document.getElementById('card-select-confirm-btn') as HTMLButtonElement | null;
+        if (confirmBtn) {
+          confirmBtn.disabled = count < 1;
+          confirmBtn.textContent = count >= 3 ? '✓ この3枚で決定！'
+            : count > 0 ? `${count}枚選択（残り${3 - count}枚をランダム補完）`
+            : '少なくとも1枚選んでください';
+        }
+      });
+    });
+
+    document.getElementById('card-select-random-btn')?.addEventListener('click', () => {
+      audioManager.playSE('select');
+      this.setState(s => confirmVoyageCards({ ...s, currentVoyageCards: [] }));
+    });
+
+    document.getElementById('card-select-confirm-btn')?.addEventListener('click', () => {
+      audioManager.playSE('decision');
+      this.setState(s => confirmVoyageCards(s));
     });
   }
 
@@ -337,14 +442,14 @@ export class App {
   // ヘッダー
   // ========================================
   private renderHeader(): string {
-    const { companyName, month, difficulty, phase, currentWeather, money } = this.state;
+    const { companyName, month, phase, currentWeather, money } = this.state;
     const weatherIcon = { sunny: '☀️', cloudy: '☁️', stormy: '⛈️' }[currentWeather];
     const phaseMsg = this.getPhaseMessage(phase);
     return `
     <div id="header">
       <span class="company-name">🏢 ${companyName}</span>
       <span class="month-display">${month}月</span>
-      <span class="difficulty-badge ${difficulty}">${difficulty === 'normal' ? 'ノーマル' : difficulty === 'hard' ? 'ハード' : '☠️激ムズ'}</span>
+      <span class="difficulty-badge extreme">☠️激ムズ</span>
       <span class="status-message">${phaseMsg}</span>
       <span class="weather-display">${weatherIcon}</span>
       <span style="font-size:0.85rem;color:var(--accent-gold);font-weight:700">¥${money.toLocaleString()}</span>
@@ -420,7 +525,7 @@ export class App {
   // 右パネル
   // ========================================
   private renderRightPanel(): string {
-    const { selectedAreaId, selectedMethodId, selectedFishermanId, phase, unlockedAreas, unlockedMethods } = this.state;
+    const { selectedAreaId, selectedMethodId, selectedCrewIds, phase, unlockedAreas, unlockedMethods } = this.state;
     const isDecision = phase === 'DECISION';
     const isGrowth = phase === 'GROWTH';
     const showUnlocked = isDecision || isGrowth; // 開放表示モード
@@ -466,45 +571,44 @@ export class App {
       </div>`;
     }).join('');
 
-    // 漁師カード（詳細ステータス表示）
-    const fishermenHtml = FISHERMEN.map(f => {
-      const yieldPct = Math.round((f.yieldBonus - 1) * 100);
-      const stabilityLabel = f.stabilityBonus >= 0.2 ? '高' : f.stabilityBonus >= 0 ? '中' : '低';
-      const stabilityClass = f.stabilityBonus >= 0.2 ? 'pos' : f.stabilityBonus >= 0 ? 'neu' : 'neg';
-      const eventPct = Math.round(f.eventBonus * 100);
-      const specialBadge = f.specialMethod
-        ? `<div class="npc-specialty-badge">${FISHING_METHODS.find(m => m.id === f.specialMethod)?.icon ?? ''} ${FISHING_METHODS.find(m => m.id === f.specialMethod)?.name ?? ''} 専門</div>`
+    // 採用済みクルーカード（DECISIONフェーズでトグル選択）
+    const hiredCrew = this.state.crew.filter(c => c.hired);
+    const crewHtml = hiredCrew.map(c => {
+      const isSelected = selectedCrewIds.includes(c.id);
+      const canSelect = isSelected || selectedCrewIds.length < 3;
+      const bond = this.state.bondLevels[c.id] ?? 0;
+      const bondHearts = '♥'.repeat(bond) + '♡'.repeat(5 - bond);
+      const yieldPct = Math.round((c.baseYieldBonus + c.upgradeLevel * c.yieldBonusPerLevel) * 100);
+      const bondBonus = bond > 0 ? `+${bond * 2}%` : '';
+      const specialBadge = c.specialMethod
+        ? `<span class="crew-special-badge">${FISHING_METHODS.find(m => m.id === c.specialMethod)?.icon ?? ''} 専門</span>`
         : '';
+      const lvBadge = c.upgradeLevel > 0 ? `<span class="crew-lv-badge">Lv.${c.upgradeLevel}</span>` : '';
       return `
-      <div class="npc-card ${selectedFishermanId === f.id ? 'selected' : ''}" data-fisher="${f.id}"
-        ${!isDecision ? 'style="pointer-events:none"' : ''}>
-        <div class="npc-name">${f.name}</div>
-        <div class="npc-stats">
-          <div class="npc-stat-row">
-            <span class="npc-stat-label">水揚げ</span>
-            <span class="npc-stat-val ${yieldPct >= 0 ? 'pos' : 'neg'}">${yieldPct >= 0 ? '+' : ''}${yieldPct}%</span>
-          </div>
-          <div class="npc-stat-row">
-            <span class="npc-stat-label">安定性</span>
-            <span class="npc-stat-val ${stabilityClass}">${stabilityLabel}</span>
-          </div>
-          <div class="npc-stat-row">
-            <span class="npc-stat-label">イベント成功率</span>
-            <span class="npc-stat-val ${eventPct >= 0 ? 'pos' : 'neg'}">${eventPct >= 0 ? '+' : ''}${eventPct}%</span>
-          </div>
+      <div class="npc-card crew-select-card ${isSelected ? 'selected' : ''} ${!canSelect && !isSelected ? 'crew-disabled' : ''}"
+        data-crew="${c.id}" ${!isDecision ? 'style="pointer-events:none"' : ''}>
+        <div class="npc-name">${c.icon} ${c.name} ${lvBadge}${specialBadge}</div>
+        <div class="npc-bond">
+          <span class="bond-hearts">${bondHearts}</span>
+          ${bondBonus ? `<span class="bond-bonus">${bondBonus}</span>` : ''}
         </div>
-        ${specialBadge}
+        <div style="font-size:0.7rem;color:${yieldPct >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
+          水揚げ ${yieldPct >= 0 ? '+' : ''}${yieldPct}%
+          ${isSelected ? '<span style="color:var(--accent-gold);margin-left:6px">✓ 出撃中</span>' : ''}
+        </div>
       </div>`;
     }).join('');
 
     const panelBodyClass = isGrowth ? 'panel-body panel-unlocked' : 'panel-body';
+    const crewCountLabel = isDecision
+      ? `<span style="font-size:0.7rem;color:var(--text-muted)">（${selectedCrewIds.length}/3 人選択中）</span>` : '';
     return `
     <div id="right-panel" class="panel">
       <div class="panel-header">意思決定リソース${isGrowth ? ' 🔓' : ''}</div>
       <div class="${panelBodyClass}">
         <div class="section-title">🌊 海域</div>${areasHtml}
         <div class="section-title">⚙️ 漁法</div>${methodsHtml}
-        <div class="section-title">👨‍✈️ 漁師</div>${fishermenHtml}
+        <div class="section-title">👨‍✈️ クルー ${crewCountLabel}</div>${crewHtml || '<div style="color:var(--text-muted);font-size:0.75rem;padding:4px">採用済みのクルーなし</div>'}
       </div>
     </div>`;
   }
@@ -535,16 +639,33 @@ export class App {
         this.refreshCenterPanel();
       });
     });
-    document.querySelectorAll('[data-fisher]').forEach(el => {
+    document.querySelectorAll('[data-crew]').forEach(el => {
       el.addEventListener('click', () => {
-        const fisherId = (el as HTMLElement).dataset.fisher!;
+        const crewId = (el as HTMLElement).dataset.crew!;
         audioManager.playSE('select');
-        this.state = { ...this.state, selectedFishermanId: fisherId };
-        // 漁師は中央パネルに影響しないのでクラス更新のみ
-        document.querySelectorAll('[data-fisher]').forEach(f => {
-          const fId = (f as HTMLElement).dataset.fisher!;
-          f.classList.toggle('selected', fId === fisherId);
+        this.state = toggleCrewSelection(this.state, crewId);
+        // DOM直接更新（クルーカードのクラスのみ）
+        document.querySelectorAll('[data-crew]').forEach(card => {
+          const cid = (card as HTMLElement).dataset.crew!;
+          const isSelected = this.state.selectedCrewIds.includes(cid);
+          const canSelect = isSelected || this.state.selectedCrewIds.length < 3;
+          card.classList.toggle('selected', isSelected);
+          card.classList.toggle('crew-disabled', !canSelect && !isSelected);
+          const selLabel = card.querySelector('span[style*="accent-gold"]');
+          if (isSelected && !selLabel) {
+            const sp = document.createElement('span');
+            sp.style.cssText = 'color:var(--accent-gold);margin-left:6px';
+            sp.textContent = '✓ 出撃中';
+            card.querySelector('div:last-child')?.appendChild(sp);
+          } else if (!isSelected && selLabel) {
+            selLabel.remove();
+          }
         });
+        // クルー選択数ラベル更新
+        const crewHeader = document.querySelector('#right-panel .section-title:last-of-type span');
+        if (crewHeader) {
+          crewHeader.textContent = `（${this.state.selectedCrewIds.length}/3 人選択中）`;
+        }
       });
     });
   }
@@ -659,40 +780,51 @@ export class App {
     audioManager.playSE('monthstart');
     document.getElementById('to-decision-btn')?.addEventListener('click', () => {
       audioManager.playSE('click');
-      this.setState(s => setPhase(s, 'DECISION'));
+      this.setState(s => enterCardSelect(s));
     });
   }
 
   // ---- 判断パネル ----
   private renderDecision(): string {
-    const { selectedAreaId, selectedMethodId, isResting, month, currentWeather, difficulty } = this.state;
+    const { selectedAreaId, selectedMethodId, isResting, month, currentWeather } = this.state;
     const area = FISHING_AREAS.find(a => a.id === selectedAreaId);
     const method = FISHING_METHODS.find(m => m.id === selectedMethodId);
 
     // コスト計算
-    const dc = DIFFICULTY_CONFIG[this.state.difficulty];
+    const dc = GAME_CONFIG;
     const fuelReduction = this.state.upgrades.filter(u => u.purchased).reduce((a, u) => a + (u.effect.fuelCostReduction || 0), 0);
     const fuelCost = area && method
       ? Math.round(dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction))
       : 0;
     const canStart = isResting || (!!selectedAreaId && !!selectedMethodId);
 
+    // 魚情報表示判定（info-1購入後に開示）
+    const hasInfo1 = this.state.upgrades.find(u => u.id === 'info-1' && u.purchased);
+    const hasInfo2 = this.state.upgrades.find(u => u.id === 'info-2' && u.purchased);
+    const hasForecast = this.state.monthlyServices.forecast;
+
     // 期待収益プレビュー
     let previewHtml = '';
     if (!isResting && area && method) {
-      const preview = calcExpectedProfit(area.id, method.id, month, currentWeather, difficulty, fuelReduction);
-      const fishChips = preview.topFish.map((f, i) => {
-        const seasonal = f.seasonality[month - 1];
-        const isHot = seasonal >= 1.2;
-        return `<span class="expected-fish-chip ${f.rarity}" style="animation-delay:${i * 0.07}s">
-          ${isHot ? '🔥' : '🐟'} ${f.name}
-          ${isHot ? `<span style="font-size:0.6rem;color:var(--accent-gold)">旬！</span>` : ''}
-        </span>`;
-      }).join('');
+      const weatherForCalc = hasForecast ? currentWeather : 'cloudy'; // 予報なしは中間値
+      const preview = calcExpectedProfit(area.id, method.id, month, weatherForCalc, fuelReduction);
       const isStormy = currentWeather === 'stormy';
+      let fishChips = '';
+      if (hasInfo1) {
+        fishChips = preview.topFish.map((f, i) => {
+          const seasonal = f.seasonality[month - 1];
+          const isHot = seasonal >= 1.2 && hasInfo2;
+          return `<span class="expected-fish-chip ${f.rarity}" style="animation-delay:${i * 0.07}s">
+            ${isHot ? '🔥' : '🐟'} ${f.name}
+            ${isHot ? `<span style="font-size:0.6rem;color:var(--accent-gold)">旬！</span>` : ''}
+          </span>`;
+        }).join('');
+      } else {
+        fishChips = `<span style="color:var(--text-muted);font-size:0.75rem">❓ どんな魚が釣れるか不明（魚群探知機で確認可）</span>`;
+      }
       previewHtml = `
       <div class="profit-preview">
-        <div class="profit-preview-title">📊 期待収益プレビュー</div>
+        <div class="profit-preview-title">📊 期待収益プレビュー${!hasForecast ? ' <span style="font-size:0.65rem;color:var(--text-muted)">（天気予報なし・概算）</span>' : ''}</div>
         <div class="expected-fish-row">${fishChips}</div>
         <div class="profit-range">
           <div class="profit-range-item">
@@ -714,14 +846,38 @@ export class App {
             </div>
           </div>
         </div>
-        ${isStormy ? '<div class="weather-warning">⛈️ 荒天のため水揚げが大幅に減少します！</div>' : ''}
+        ${hasForecast && isStormy ? '<div class="weather-warning">⛈️ 荒天のため水揚げが大幅に減少します！</div>' : ''}
+        ${hasForecast ? `<div style="font-size:0.7rem;margin-top:4px;color:var(--accent-green)">📡 予報：${{ sunny: '☀️ 晴れ', cloudy: '☁️ くもり', stormy: '⛈️ 荒れ' }[currentWeather]}</div>` : ''}
       </div>`;
     }
+
+    // 消費型サービス
+    const svc = this.state.monthlyServices;
+    const serviceHtml = `
+    <div class="decision-section service-section">
+      <div class="decision-section-title">🛒 今月のオプション</div>
+      <div class="service-row">
+        <button id="btn-forecast" class="service-btn ${svc.forecast ? 'service-purchased' : ''}" ${svc.forecast || this.state.money < 100_000 ? 'disabled' : ''}>
+          <span class="service-icon">📡</span>
+          <span>天気予報</span>
+          <span class="service-cost">${svc.forecast ? '✓ 購入済' : '¥100,000'}</span>
+        </button>
+        <button id="btn-insurance" class="service-btn ${svc.insurance ? 'service-purchased' : ''}" ${svc.insurance || this.state.money < 150_000 ? 'disabled' : ''}>
+          <span class="service-icon">🛡️</span>
+          <span>漁業保険</span>
+          <span class="service-cost">${svc.insurance ? '✓ 購入済' : '¥150,000'}</span>
+        </button>
+      </div>
+      <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">
+        天気予報：天候を事前確認 ／ 漁業保険：赤字損失の30%補填
+      </div>
+    </div>`;
 
     return `
     <div class="panel-header">判断フェーズ</div>
     <div class="panel-body">
       <div class="decision-view">
+        ${serviceHtml}
         <div class="decision-section">
           <div class="decision-section-title">出港 / 休業</div>
           <div class="rest-toggle">
@@ -786,6 +942,29 @@ export class App {
   }
 
   private bindDecision() {
+    // 消費型サービス購入
+    document.getElementById('btn-forecast')?.addEventListener('click', () => {
+      if (this.state.monthlyServices.forecast || this.state.money < 100_000) return;
+      audioManager.playSE('coin');
+      this.state = {
+        ...this.state,
+        money: this.state.money - 100_000,
+        monthlyServices: { ...this.state.monthlyServices, forecast: true },
+      };
+      this.refreshCenterPanel();
+      this.updateMoneyDisplay();
+    });
+    document.getElementById('btn-insurance')?.addEventListener('click', () => {
+      if (this.state.monthlyServices.insurance || this.state.money < 150_000) return;
+      audioManager.playSE('coin');
+      this.state = {
+        ...this.state,
+        money: this.state.money - 150_000,
+        monthlyServices: { ...this.state.monthlyServices, insurance: true },
+      };
+      this.refreshCenterPanel();
+      this.updateMoneyDisplay();
+    });
     document.getElementById('btn-port')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => ({ ...s, isResting: false })); });
     document.getElementById('btn-rest')?.addEventListener('click', () => { audioManager.playSE('click'); this.setState(s => ({ ...s, isResting: true, selectedAreaId: null, selectedMethodId: null })); });
     const borrowInput = document.getElementById('borrow-input') as HTMLInputElement;
@@ -801,6 +980,13 @@ export class App {
         this.setState(s => prepareOperation(s));
       }
     });
+  }
+
+  private updateMoneyDisplay() {
+    const headerMoney = document.querySelector<HTMLElement>('#header span[style*="accent-gold"]');
+    if (headerMoney) headerMoney.textContent = `¥${this.state.money.toLocaleString()}`;
+    const leftMoney = document.querySelector<HTMLElement>('#left-panel .money');
+    if (leftMoney) leftMoney.textContent = `¥${this.state.money.toLocaleString()}`;
   }
 
   // ---- 結果（アニメーション後にcountUpを呼ぶ）----
@@ -836,7 +1022,7 @@ export class App {
         <div style="text-align:center;padding:24px;color:var(--accent-gold)">
           <div style="font-size:3rem;animation:bannerPop 0.5s cubic-bezier(0.34,1.56,0.64,1)">🏠</div>
           <div style="font-size:1.1rem;font-weight:700;margin-top:10px">今月は休業</div>
-          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">副業収入: ¥${DIFFICULTY_CONFIG[this.state.difficulty].restIncome.toLocaleString()}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">副業収入: ¥${GAME_CONFIG.restIncome.toLocaleString()}</div>
         </div>` : `
         ${isHugeCatch ? `<div class="big-catch-banner">🎉 大漁！今月は絶好調でした！</div>` : ''}
         <div class="result-header">
@@ -950,7 +1136,7 @@ export class App {
 
   // ---- 成長・解放 ----
   private renderGrowth(): string {
-    const { level, unlockedAreas, unlockedMethods, upgrades, money, monthHistory } = this.state;
+    const { level, unlockedAreas, unlockedMethods, upgrades, money, monthHistory, crew } = this.state;
     const prevResult = monthHistory[monthHistory.length - 1];
     // 今回レベルアップで初めて解放されたもの（Lv1初期解放は除外）
     const newAreas = level > 1
@@ -959,7 +1145,81 @@ export class App {
     const newMethods = level > 1
       ? unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level)
       : [];
-    const availableUpgrades = upgrades.filter(u => !u.purchased && u.unlockLevel <= level);
+
+    // スキルツリーUI（カテゴリ別）
+    const categories: Array<{ key: string; label: string; icon: string }> = [
+      { key: 'info', label: '情報', icon: '🔭' },
+      { key: 'efficiency', label: '効率化', icon: '⚙️' },
+      { key: 'yield', label: '収益強化', icon: '📈' },
+      { key: 'market', label: '市場', icon: '🏪' },
+      { key: 'diving', label: '素潜り', icon: '🤿' },
+    ];
+    const skillTreeHtml = categories.map(cat => {
+      const items = upgrades.filter(u => u.category === cat.key);
+      const rowHtml = items.map(u => {
+        const prereqMet = !u.requires || u.requires.every(rid => upgrades.find(r => r.id === rid && r.purchased));
+        const locked = u.unlockLevel > level;
+        const canBuy = prereqMet && !u.purchased && !locked && money >= u.cost;
+        const dimmed = !prereqMet || locked;
+        return `
+        <div class="skill-item ${u.purchased ? 'skill-purchased' : dimmed ? 'skill-locked' : ''}">
+          <div class="skill-name">${u.name}</div>
+          <div class="skill-desc">${u.description}</div>
+          ${u.requires ? `<div class="skill-req">→ ${u.requires.map(rid => upgrades.find(r => r.id === rid)?.name ?? rid).join(', ')}が必要</div>` : ''}
+          <div class="skill-footer">
+            <span class="skill-cost">¥${u.cost.toLocaleString()}</span>
+            ${u.purchased
+              ? '<span class="skill-done">✅ 購入済</span>'
+              : locked
+                ? `<span class="skill-locked-badge">🔒 Lv.${u.unlockLevel}</span>`
+                : `<button class="upgrade-btn" data-upgrade="${u.id}" ${canBuy ? '' : 'disabled'}>${money >= u.cost && prereqMet ? '購入' : !prereqMet ? '前提未購入' : '資金不足'}</button>`
+            }
+          </div>
+        </div>`;
+      }).join('');
+      if (items.length === 0) return '';
+      return `
+      <div class="skill-category">
+        <div class="skill-category-title">${cat.icon} ${cat.label}</div>
+        ${rowHtml}
+      </div>`;
+    }).join('');
+
+    // 船員管理UI
+    const crewHtml = CREW_MEMBERS.map(template => {
+      const c = crew.find(cr => cr.id === template.id)!;
+      const bond = this.state.bondLevels[c.id] ?? 0;
+      const bondHearts = '♥'.repeat(bond) + '♡'.repeat(5 - bond);
+      const unlocked = !template.unlockLevel || template.unlockLevel <= level;
+      const canHire = !c.hired && unlocked && money >= c.hireCost;
+      const canUpgrade = c.hired && c.upgradeLevel < 3 && money >= c.upgradeCosts[c.upgradeLevel];
+      return `
+      <div class="crew-manage-card ${c.hired ? 'crew-hired' : ''}">
+        <div class="crew-manage-header">
+          <span class="crew-icon">${c.icon}</span>
+          <div>
+            <div class="crew-manage-name">${c.name}</div>
+            ${c.hired ? `<div class="crew-manage-lv">Lv.${c.upgradeLevel} <span class="bond-hearts" style="font-size:0.7rem">${bondHearts}</span></div>` : ''}
+          </div>
+          ${!unlocked ? `<span class="skill-locked-badge" style="margin-left:auto">🔒 Lv.${template.unlockLevel}</span>` : ''}
+        </div>
+        <div class="crew-manage-desc">${c.description}</div>
+        <div class="crew-manage-footer">
+          ${!c.hired
+            ? `<span class="crew-hire-cost">採用: ¥${c.hireCost.toLocaleString()}</span>
+               <button class="upgrade-btn" data-hire-crew="${c.id}" ${canHire ? '' : 'disabled'}>
+                 ${!unlocked ? '🔒' : !canHire && c.hireCost > 0 ? '資金不足' : c.hireCost === 0 ? '採用済' : '採用する'}
+               </button>`
+            : c.upgradeLevel < 3
+              ? `<span class="crew-hire-cost">強化: ¥${c.upgradeCosts[c.upgradeLevel].toLocaleString()} (Lv${c.upgradeLevel}→${c.upgradeLevel + 1})</span>
+                 <button class="upgrade-btn" data-upgrade-crew="${c.id}" ${canUpgrade ? '' : 'disabled'}>
+                   ${canUpgrade ? 'スキルUP' : '資金不足'}
+                 </button>`
+              : '<span style="color:var(--accent-gold);font-size:0.75rem">✨ MAX強化済</span>'
+          }
+        </div>
+      </div>`;
+    }).join('');
 
     return `
     <div class="panel-header">成長・解放</div>
@@ -984,23 +1244,14 @@ export class App {
             ${newMethods.map(id => { const m = FISHING_METHODS.find(m => m.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${m.icon}</span>漁法「${m.name}」が解放されました！</div>`; }).join('')}
           </div>
         </div>` : ''}
-        ${availableUpgrades.length > 0 ? `
         <div>
-          <div style="font-size:0.8rem;font-weight:700;margin-bottom:6px">⚡ アップグレード</div>
-          <div class="upgrade-grid">
-            ${availableUpgrades.map(u => `
-            <div class="upgrade-card">
-              <div class="upgrade-info">
-                <div class="upgrade-name">${u.name}</div>
-                <div class="upgrade-desc">${u.description}</div>
-              </div>
-              <span class="upgrade-cost">¥${u.cost.toLocaleString()}</span>
-              <button class="upgrade-btn" data-upgrade="${u.id}" ${money >= u.cost ? '' : 'disabled'}>
-                ${money >= u.cost ? '購入' : '資金不足'}
-              </button>
-            </div>`).join('')}
-          </div>
-        </div>` : ''}
+          <div style="font-size:0.8rem;font-weight:700;margin-bottom:6px">⚡ スキルツリー</div>
+          <div class="skill-tree-grid">${skillTreeHtml}</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">👨‍✈️ 船員管理</div>
+          <div class="crew-manage-grid">${crewHtml}</div>
+        </div>
         <button id="next-month-btn" class="next-btn">
           ${this.state.month >= 12 ? '🏁 ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
         </button>
@@ -1009,23 +1260,35 @@ export class App {
   }
 
   private bindGrowth() {
+    // スキルツリー購入
     document.querySelectorAll('[data-upgrade]').forEach(btn => {
       btn.addEventListener('click', () => {
         const upgradeId = (btn as HTMLElement).dataset.upgrade!;
         audioManager.playSE('coin');
         this.state = purchaseUpgrade(this.state, upgradeId);
-        // 再描画なし — ボタン・カードをその場で無効化
-        const card = (btn as HTMLElement).closest('.upgrade-card') as HTMLElement;
-        if (card) {
-          card.style.opacity = '0.45';
-          card.style.pointerEvents = 'none';
-          const btnEl = card.querySelector('button') as HTMLButtonElement | null;
-          if (btnEl) { btnEl.textContent = '✅ 購入済み'; btnEl.disabled = true; }
-        }
-        const headerMoney = document.querySelector<HTMLElement>('#header span[style*="accent-gold"]');
-        if (headerMoney) headerMoney.textContent = `¥${this.state.money.toLocaleString()}`;
-        const leftMoney = document.querySelector<HTMLElement>('#left-panel .money');
-        if (leftMoney) leftMoney.textContent = `¥${this.state.money.toLocaleString()}`;
+        // 再描画（スキルツリー全体を更新）
+        this.refreshCenterPanel();
+        this.updateMoneyDisplay();
+      });
+    });
+    // 船員雇用
+    document.querySelectorAll('[data-hire-crew]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const crewId = (btn as HTMLElement).dataset.hireCrew!;
+        audioManager.playSE('coin');
+        this.state = hireCrew(this.state, crewId);
+        this.refreshCenterPanel();
+        this.updateMoneyDisplay();
+      });
+    });
+    // 船員スキルアップ
+    document.querySelectorAll('[data-upgrade-crew]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const crewId = (btn as HTMLElement).dataset.upgradeCrew!;
+        audioManager.playSE('coin');
+        this.state = upgradeCrew(this.state, crewId);
+        this.refreshCenterPanel();
+        this.updateMoneyDisplay();
       });
     });
     document.getElementById('next-month-btn')?.addEventListener('click', () => {
@@ -1243,12 +1506,39 @@ export class App {
   }
 
   // ========================================
-  // イベントモーダル
+  // イベントモーダル（通常 / クイック決断 の2種）
   // ========================================
   private renderEventModal(): string {
     const eventIdx = this.state.currentEventIndex;
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return '';
+
+    const isQuick = event.template.isQuick ?? false;
+
+    if (isQuick) {
+      // クイック決断：即時効果・ルーレットなし
+      const optionsHtml = event.template.options.map((opt, i) => {
+        const effDesc = this.describeEffect(opt.effect);
+        return `
+        <button class="quick-option-btn" data-option="${i}">
+          <div class="quick-option-label">${opt.label}</div>
+          <div class="quick-option-effect">${effDesc}</div>
+        </button>`;
+      }).join('');
+
+      return `
+      <div class="modal-overlay quick-overlay">
+        <div class="quick-decision-modal">
+          <div class="quick-decision-day">⚡ ${event.day}日目 — 判断タイム！</div>
+          <div class="quick-decision-title">${event.template.title}</div>
+          <div class="quick-decision-body">${event.template.description}</div>
+          <div class="quick-decision-options">${optionsHtml}</div>
+          <div class="quick-decision-hint">※ どちらを選んでも漁は継続します</div>
+        </div>
+      </div>`;
+    }
+
+    // 通常イベント：ルーレットあり
     const optionsHtml = event.template.options.map((opt, i) => `
       <button class="event-option-btn" data-option="${i}">
         <div class="event-option-label">
@@ -1273,14 +1563,29 @@ export class App {
     const eventIdx = this.state.currentEventIndex;
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return;
-    document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
-      btn.addEventListener('click', () => {
-        const option = event.template.options[i];
-        this.showRoulette(option, (success) => {
-          this.setState(s => resolveEvent(s, option, success));
+
+    const isQuick = event.template.isQuick ?? false;
+
+    if (isQuick) {
+      // クイック決断：即時適用（ルーレットなし）
+      document.querySelectorAll('.quick-option-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+          const option = event.template.options[i];
+          audioManager.playSE('select');
+          this.setState(s => resolveEvent(s, option, true));
         });
       });
-    });
+    } else {
+      // 通常イベント：ルーレット
+      document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+          const option = event.template.options[i];
+          this.showRoulette(option, (success) => {
+            this.setState(s => resolveEvent(s, option, success));
+          });
+        });
+      });
+    }
   }
 
   // ========================================
@@ -1290,8 +1595,8 @@ export class App {
     const successRates: Record<string, number> = { low: 0.70, medium: 0.50, high: 0.10 };
     const baseRate = successRates[option.risk] ?? 0.5;
 
-    const fisherman = this.state.fishermen.find(f => f.id === this.state.selectedFishermanId);
-    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + (fisherman?.eventBonus ?? 0)));
+    const crewEventBonus = getCrewEventBonus(this.state);
+    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + crewEventBonus));
     const finalSuccess = Math.random() < adjustedRate;
 
     const greenPct = Math.round(adjustedRate * 100);
@@ -1316,8 +1621,8 @@ export class App {
     const spinDuration = 2.0 + spins * 0.25;
 
     const riskLabel = option.risk === 'low' ? '低リスク' : option.risk === 'medium' ? '中リスク' : '⚠️ 高リスク';
-    const fisherBonus = fisherman && fisherman.eventBonus !== 0
-      ? `<span class="roulette-fisher-bonus ${fisherman.eventBonus > 0 ? 'positive' : 'negative'}">${fisherman.name.split('（')[0]}: ${fisherman.eventBonus > 0 ? '+' : ''}${Math.round(fisherman.eventBonus * 100)}%補正</span>`
+    const fisherBonus = crewEventBonus !== 0
+      ? `<span class="roulette-fisher-bonus ${crewEventBonus > 0 ? 'positive' : 'negative'}">クルー補正: ${crewEventBonus > 0 ? '+' : ''}${Math.round(crewEventBonus * 100)}%</span>`
       : '';
 
     const overlay = document.createElement('div');
@@ -1406,8 +1711,8 @@ export class App {
   // ========================================
   private renderEndModal(): string {
     const score = calculateScore(this.state);
-    const { companyName, totalProfit, level, difficulty, reputation, debt, unlockedAreas, unlockedMethods } = this.state;
-    const dm = DIFFICULTY_CONFIG[difficulty].scoreMultiplier;
+    const { companyName, totalProfit, level, reputation, debt, unlockedAreas, unlockedMethods } = this.state;
+    const dm = GAME_CONFIG.scoreMultiplier;
     const levelBonus = (level - 1) * 500000;
     const unlockedBonus = (unlockedAreas.length + unlockedMethods.length) * 100000;
     const repBonus = reputation * 10000;
@@ -1424,7 +1729,7 @@ export class App {
           <div class="score-row"><span>解放ボーナス (${unlockedAreas.length}海域/${unlockedMethods.length}漁法)</span><span class="text-gold">+¥${unlockedBonus.toLocaleString()}</span></div>
           <div class="score-row"><span>評判ボーナス (${reputation}pt)</span><span class="text-gold">+¥${repBonus.toLocaleString()}</span></div>
           ${debt > 0 ? `<div class="score-row"><span>借金ペナルティ</span><span class="text-red">-¥${debtPenalty.toLocaleString()}</span></div>` : ''}
-          <div class="score-row"><span>難易度補正 (${difficulty === 'normal' ? 'ノーマル' : difficulty === 'hard' ? 'ハード' : '☠️激ムズ'})</span><span>×${dm}</span></div>
+          <div class="score-row"><span>難易度補正 (☠️激ムズ)</span><span>×${dm}</span></div>
           <div class="score-row total"><span>最終スコア</span><span class="text-gold">${score.toLocaleString()} pt</span></div>
         </div>
         <div id="ranking-section"><div style="color:var(--text-muted);font-size:0.8rem">ランキングを読み込み中...</div></div>
@@ -1451,7 +1756,7 @@ export class App {
       this.render();
     });
     document.getElementById('share-btn')?.addEventListener('click', () => {
-      const text = `【石川漁業シミュレーション】\n${this.state.companyName} スコア: ${score.toLocaleString()}pt\n難易度: ${this.state.difficulty === 'hard' ? 'ハード' : 'ノーマル'} Lv.${this.state.level}`;
+      const text = `【石川漁業シミュレーション】\n${this.state.companyName} スコア: ${score.toLocaleString()}pt\n難易度: ☠️激ムズ Lv.${this.state.level}`;
       navigator.clipboard.writeText(text).catch(() => prompt('結果テキスト:', text));
     });
   }
@@ -1589,19 +1894,26 @@ export class App {
     document.getElementById('tutorial-next-btn')?.addEventListener('click', () => {
       const next = this.state.tutorialStep + 1;
       const newStep = next > TUTORIAL_STEPS.length ? -1 : next;
-      // RUNNING/EVENT フェーズはアニメーション・モーダルを維持するため DOM直接操作
-      if (this.state.phase === 'RUNNING' || this.state.phase === 'EVENT') {
-        this.state = { ...this.state, tutorialStep: newStep };
-        document.getElementById('tutorial-overlay')?.remove();
-        return;
+      // 全フェーズでDOM直接操作（フラッシュなし）
+      this.state = { ...this.state, tutorialStep: newStep };
+      const nextHtml = this.renderTutorialOverlay();
+      const overlay = document.getElementById('tutorial-overlay');
+      if (nextHtml) {
+        if (overlay) {
+          overlay.outerHTML = nextHtml;
+        } else {
+          document.body.insertAdjacentHTML('beforeend', nextHtml);
+        }
+        this.bindTutorial();
+      } else {
+        overlay?.remove();
       }
-      this.setState(s => ({ ...s, tutorialStep: newStep }));
     });
   }
 
   private async submitAndLoadRanking() {
     const score = calculateScore(this.state);
-    await submitScore({ companyName: this.state.companyName, score, difficulty: this.state.difficulty, level: this.state.level, totalProfit: this.state.totalProfit });
+    await submitScore({ companyName: this.state.companyName, score, difficulty: 'extreme', level: this.state.level, totalProfit: this.state.totalProfit });
     const rankings = await getLeaderboard(20);
     const myIdx = rankings.findIndex(r => r.companyName === this.state.companyName && r.score === score);
     const rankingSection = document.getElementById('ranking-section');
@@ -1609,7 +1921,8 @@ export class App {
     const rowsHtml = rankings.slice(0, 10).map((r, i) => {
       const isMe = i === myIdx;
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
-      return `<tr ${isMe ? 'class="my-rank"' : ''}><td>${medal}</td><td>${r.companyName}${isMe ? ' 👈' : ''}</td><td>${r.score.toLocaleString()}</td><td>${r.difficulty === 'hard' ? 'ハード' : 'ノーマル'}</td><td>Lv.${r.level}</td></tr>`;
+      const diffLabel = r.difficulty === 'extreme' ? '☠️激ムズ' : r.difficulty === 'hard' ? 'ハード' : 'ノーマル';
+      return `<tr ${isMe ? 'class="my-rank"' : ''}><td>${medal}</td><td>${r.companyName}${isMe ? ' 👈' : ''}</td><td>${r.score.toLocaleString()}</td><td>${diffLabel}</td><td>Lv.${r.level}</td></tr>`;
     }).join('');
     rankingSection.innerHTML = `
     <div style="font-size:0.85rem;font-weight:700;margin:12px 0 6px;color:var(--accent-primary)">

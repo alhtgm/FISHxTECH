@@ -10,7 +10,7 @@ app = FastAPI(title="FISHxTECH API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    allow_origins=["http://localhost:5173", "http://localhost:4173", "http://localhost"],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
