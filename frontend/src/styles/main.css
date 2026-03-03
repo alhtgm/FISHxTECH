@@ -1686,3 +1686,293 @@ html, body {
   border-radius: 8px; padding: 1px 5px;
   font-weight: 600;
 }
+
+/* ========================================
+   クルー選択カード（DECISIONフェーズ右パネル）
+   ======================================== */
+.crew-select-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  user-select: none;
+}
+.crew-select-card:hover {
+  border-color: var(--accent-secondary);
+  background: var(--bg-highlight);
+}
+.crew-select-card.selected {
+  border-color: var(--accent-primary);
+  background: rgba(16,208,245,0.08);
+  box-shadow: 0 0 10px rgba(16,208,245,0.2);
+}
+.crew-select-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.crew-select-card.disabled:hover {
+  border-color: var(--border-color);
+  background: var(--bg-card);
+}
+.crew-select-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.crew-select-info {
+  flex: 1;
+  min-width: 0;
+}
+.crew-select-name {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+.crew-select-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.crew-select-check {
+  font-size: 1.1rem;
+  color: var(--accent-primary);
+  transition: opacity 0.15s;
+}
+.crew-select-card:not(.selected) .crew-select-check {
+  opacity: 0;
+}
+.crew-select-counter {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-align: right;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+/* ========================================
+   クルー管理（GROWTHフェーズ）
+   ======================================== */
+.crew-manage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.crew-manage-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.crew-manage-card.hired {
+  border-color: var(--accent-green);
+  background: rgba(61,219,168,0.05);
+}
+.crew-manage-card.locked {
+  opacity: 0.5;
+}
+.crew-manage-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.crew-manage-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.crew-manage-name {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+.crew-manage-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.crew-manage-level {
+  font-size: 0.72rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+.crew-manage-btn {
+  background: var(--accent-secondary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  width: 100%;
+}
+.crew-manage-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+}
+.crew-manage-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.crew-manage-btn.upgrade-btn {
+  background: #7c4dff;
+}
+.crew-manage-btn.upgrade-btn:hover:not(:disabled) {
+  background: #9c6fff;
+}
+
+/* ========================================
+   スキルツリー（GROWTHフェーズ）
+   ======================================== */
+.skill-tree-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.skill-category {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skill-category-header {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: rgba(16,208,245,0.12);
+  color: var(--accent-primary);
+  letter-spacing: 0.5px;
+}
+.skill-item {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 9px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+}
+.skill-item:hover:not(.skill-locked):not(.skill-purchased) {
+  border-color: var(--accent-secondary);
+  background: var(--bg-highlight);
+}
+.skill-item.skill-purchased {
+  border-color: var(--accent-green);
+  background: rgba(61,219,168,0.07);
+  cursor: default;
+}
+.skill-item.skill-locked {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.skill-item-arrow {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0 0 2px;
+}
+.skill-item-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.skill-item-desc {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.skill-item-cost {
+  font-size: 0.7rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+  margin-top: 4px;
+}
+.skill-item-purchased-badge {
+  font-size: 0.65rem;
+  color: var(--accent-green);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ========================================
+   消費型サービス（DECISIONフェーズ）
+   ======================================== */
+.service-section {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+}
+.service-section-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  margin-bottom: 8px;
+}
+.service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.service-row:last-child {
+  margin-bottom: 0;
+}
+.service-info {
+  flex: 1;
+  min-width: 0;
+}
+.service-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.service-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.service-btn {
+  background: var(--accent-secondary);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+.service-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+}
+.service-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.service-purchased {
+  font-size: 0.75rem;
+  color: var(--accent-green);
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

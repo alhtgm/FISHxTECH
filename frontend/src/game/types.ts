@@ -56,7 +56,6 @@ export interface PersonalBests {
   bestStreak: number;
 }
 
-export type Difficulty = 'normal' | 'hard' | 'extreme';
 export type Weather = 'sunny' | 'cloudy' | 'stormy';
 
 // ========================================
@@ -102,20 +101,27 @@ export interface FishSpecies {
 }
 
 // ========================================
-// NPC漁師
+// 船員（クルー）
 // ========================================
-export interface Fisherman {
+export interface CrewMember {
   id: string;
   name: string;
   description: string;
-  yieldBonus: number;      // 水揚げ補正（倍率）
-  stabilityBonus: number;  // 安定性補正（ばらつき軽減、0〜1）
-  specialMethod?: string;  // 特定漁法が得意
-  eventBonus: number;      // イベント時の有利補正
+  icon: string;
+  hireCost: number;
+  hired: boolean;
+  upgradeLevel: number;         // 0〜3
+  upgradeCosts: number[];       // [Lv0→1, Lv1→2, Lv2→3]
+  baseYieldBonus: number;       // 基本水揚げボーナス（0.1 = +10%）
+  baseStabilityBonus: number;   // 安定性（ばらつき軽減）
+  baseEventBonus: number;       // イベント成功率ボーナス
+  yieldBonusPerLevel: number;   // アップグレード1段階ごとの水揚げボーナス
+  specialMethod?: string;       // 特定漁法が得意（+20%）
+  unlockLevel?: number;         // 解放に必要な会社レベル
 }
 
 // ========================================
-// アップグレード
+// アップグレード（スキルツリー）
 // ========================================
 export interface Upgrade {
   id: string;
@@ -125,13 +131,17 @@ export interface Upgrade {
   effect: UpgradeEffect;
   purchased: boolean;
   unlockLevel: number;
+  requires?: string[];                                                       // 前提アップグレードID
+  category: 'info' | 'efficiency' | 'yield' | 'diving' | 'market';         // カテゴリ
 }
 
 export interface UpgradeEffect {
-  priceVarianceReduction?: number;  // 価格ブレ軽減
-  fuelCostReduction?: number;       // 燃料費削減率
-  yieldBonus?: number;              // 水揚げ量UP
-  reputationBonus?: number;         // 評価UP
+  priceVarianceReduction?: number;        // 価格ブレ軽減
+  fuelCostReduction?: number;             // 燃料費削減率
+  yieldBonus?: number;                    // 水揚げ量UP
+  reputationBonus?: number;               // 評価UP
+  methodYieldMultiplier?: { methodId: string; mult: number };  // 特定漁法の水揚げ倍率
+  fishPriceBonus?: { fishIds: string[]; mult: number };        // 特定魚種の価格ボーナス
 }
 
 // ========================================
@@ -259,7 +269,6 @@ export interface LogEntry {
 export interface GameState {
   phase: GamePhase;
   companyName: string;
-  difficulty: Difficulty;
   month: number;           // 1〜12
 
   money: number;
@@ -273,8 +282,8 @@ export interface GameState {
   unlockedAreas: string[];
   unlockedMethods: string[];
   upgrades: Upgrade[];
-  fishermen: Fisherman[];
-  selectedFishermanId: string | null;
+  crew: CrewMember[];
+  selectedCrewIds: string[];   // 最大3人まで選択可能
 
   // 今月の選択
   selectedAreaId: string | null;
@@ -309,8 +318,11 @@ export interface GameState {
   currentVoyageCards: VoyageCard[];
   voyageCardDeck: VoyageCard[];     // CARD_SELECT中の5枚候補
 
+  // 今月の消費型サービス
+  monthlyServices: { forecast: boolean; insurance: boolean };
+
   // 漁師絆
-  bondLevels: Record<string, number>; // fisherman id → 0〜5
+  bondLevels: Record<string, number>; // crew id → 0〜5
 
   // New Game+ / 年度制
   runNumber: number;           // 1=初回, 2+=NG+

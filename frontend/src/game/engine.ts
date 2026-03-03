@@ -5,28 +5,26 @@
 import type {
   GameState, GamePhase, Weather, MonthResult, CatchRecord,
   ScheduledEvent, EventOption, LearningBonus, LogEntry, ActiveChallenge,
-  VoyageCard,
+  VoyageCard, CrewMember,
 } from './types';
 import {
-  FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN,
-  UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG, DIFFICULTY_CONFIG,
+  FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, CREW_MEMBERS,
+  UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG,
   CHALLENGE_TEMPLATES, VOYAGE_CARDS,
 } from './data';
-import type { Difficulty } from './types';
 
-function getDC(difficulty: Difficulty) {
-  return DIFFICULTY_CONFIG[difficulty];
+function getConfig() {
+  return GAME_CONFIG;
 }
 
 // ----------------------------------------
 // 初期状態生成
 // ----------------------------------------
 export function createInitialState(): GameState {
-  const dc = getDC('normal');
+  const dc = getConfig();
   return {
     phase: 'INIT',
     companyName: '',
-    difficulty: 'normal',
     month: 1,
     money: dc.initialMoney,
     debt: 0,
@@ -37,8 +35,8 @@ export function createInitialState(): GameState {
     unlockedAreas: ['kaga', 'nanao-bay'],
     unlockedMethods: ['fixed-net', 'bottom-trawl', 'gill-net'],
     upgrades: UPGRADES.map(u => ({ ...u, purchased: false })),
-    fishermen: [...FISHERMEN],
-    selectedFishermanId: FISHERMEN[0].id,
+    crew: CREW_MEMBERS.map(c => ({ ...c })),
+    selectedCrewIds: [CREW_MEMBERS[0].id],  // 高橋正一（初期採用済み）を初期選択
     selectedAreaId: null,
     selectedMethodId: null,
     isResting: false,
@@ -59,6 +57,7 @@ export function createInitialState(): GameState {
     currentVoyageCards: [],
     voyageCardDeck: [],
     bondLevels: {},
+    monthlyServices: { forecast: false, insurance: false },
     runNumber: 1,
     yearFuelMultiplier: 1.0,
     yearFixedMultiplier: 1.0,
@@ -163,16 +162,17 @@ function getCardFx(cards: VoyageCard[], weather: Weather) {
 export function startNewYear(state: GameState): GameState {
   const carryover = Math.round(state.money * 0.4);
   const newRun = state.runNumber + 1;
-  const dc = getDC(state.difficulty);
+  const dc = getConfig();
   const fuelMult = 1 + (newRun - 1) * 0.15;
   const fixedMult = 1 + (newRun - 1) * 0.12;
 
   return startMonth({
     ...createInitialState(),
     companyName: state.companyName,
-    difficulty: state.difficulty,
     money: dc.initialMoney * 0.3 + carryover,
     upgrades: state.upgrades,
+    crew: state.crew,   // クルーは引き継ぐ（雇用・強化済みのまま）
+    selectedCrewIds: state.selectedCrewIds,
     unlockedAreas: ['kaga', 'nanao-bay'],
     unlockedMethods: ['fixed-net', 'bottom-trawl', 'gill-net'],
     reputation: Math.round(state.reputation * 0.5),
@@ -253,10 +253,10 @@ export function setPhase(state: GameState, phase: GamePhase): GameState {
 }
 
 // ----------------------------------------
-// ゲーム開始（難易度パラメータ適用）
+// ゲーム開始
 // ----------------------------------------
 export function startGame(state: GameState): GameState {
-  const dc = getDC(state.difficulty);
+  const dc = getConfig();
   return startMonth({
     ...state,
     money: dc.initialMoney,
@@ -271,7 +271,7 @@ export function startGame(state: GameState): GameState {
 // 月開始処理
 // ----------------------------------------
 export function startMonth(state: GameState): GameState {
-  const weather = rollWeather(state.difficulty);
+  const weather = rollWeather();
   const regulations = REGULATIONS.filter(r => r.month === state.month);
   const newsTemplate = NEWS_TEMPLATES.find(n => n.month === state.month);
   const news = newsTemplate ? newsTemplate.items : [];
@@ -297,11 +297,12 @@ export function startMonth(state: GameState): GameState {
     monthResult: null,
     storyBeatSeen: false,
     extraCrewDeployed: false,
+    monthlyServices: { forecast: false, insurance: false },
   };
 }
 
-function rollWeather(difficulty: Difficulty): Weather {
-  const dc = getDC(difficulty);
+function rollWeather(): Weather {
+  const dc = getConfig();
   const r = Math.random();
   if (r < dc.weatherSunny) return 'sunny';
   if (r < dc.weatherSunny + dc.weatherCloudy) return 'cloudy';
@@ -313,7 +314,7 @@ function rollWeather(difficulty: Difficulty): Weather {
 // ----------------------------------------
 export function applyBorrow(state: GameState, amount: number): GameState {
   if (amount <= 0) return state;
-  const dc = getDC(state.difficulty);
+  const dc = getConfig();
   const newDebt = state.debt + amount;
   if (newDebt > dc.maxDebt) return state;
 
@@ -457,7 +458,12 @@ export function finishMonth(state: GameState): GameState {
 
   // 休業時の副業収入
   if (state.isResting) {
-    money += getDC(state.difficulty).restIncome;
+    money += getConfig().restIncome;
+  }
+
+  // 漁業保険（赤字時に損失の30%を補填）
+  if (state.monthlyServices.insurance && result.profit < 0) {
+    money += Math.round(Math.abs(result.profit) * 0.3);
   }
 
   const totalProfit = state.totalProfit + result.profit;
@@ -498,11 +504,13 @@ export function finishMonth(state: GameState): GameState {
     },
   ];
 
-  // 漁師絆レベル更新（操業した月は+1）
+  // クルー絆レベル更新（操業した月は選択クルー全員+1）
   const bondLevels = { ...state.bondLevels };
-  if (!state.isResting && state.selectedFishermanId) {
-    const current = bondLevels[state.selectedFishermanId] ?? 0;
-    bondLevels[state.selectedFishermanId] = Math.min(5, current + 1);
+  if (!state.isResting) {
+    for (const crewId of state.selectedCrewIds) {
+      const current = bondLevels[crewId] ?? 0;
+      bondLevels[crewId] = Math.min(5, current + 1);
+    }
   }
 
   return {
@@ -537,8 +545,8 @@ function calcLevel(totalProfit: number): number {
 }
 
 function calculateMonthResult(state: GameState): MonthResult {
-  const { selectedAreaId, selectedMethodId, isResting, currentWeather, difficulty } = state;
-  const dc = getDC(difficulty);
+  const { selectedAreaId, selectedMethodId, isResting, currentWeather } = state;
+  const dc = getConfig();
 
   // 航海カード効果を集約
   const cardFx = getCardFx(state.currentVoyageCards, currentWeather);
@@ -568,7 +576,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   const method = FISHING_METHODS.find(m => m.id === selectedMethodId)!;
 
   if (!area || !method) {
-    return emptyResult(effectiveWeather, calcInterest(state), state.difficulty);
+    return emptyResult(effectiveWeather, calcInterest(state));
   }
 
   // 対象魚種を絞る（海域×漁法の交差）
@@ -577,7 +585,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   );
 
   if (validFish.length === 0) {
-    return emptyResult(effectiveWeather, calcInterest(state), state.difficulty);
+    return emptyResult(effectiveWeather, calcInterest(state));
   }
 
   // 天候補正（実効天候を使用）
@@ -600,11 +608,22 @@ function calculateMonthResult(state: GameState): MonthResult {
     if (lb.effect.yieldMultiplier) learningYieldBonus *= lb.effect.yieldMultiplier;
   }
 
-  // 漁師ボーナス
-  const fisherman = state.fishermen.find(f => f.id === state.selectedFishermanId);
-  const fisherYieldBonus = fisherman ? fisherman.yieldBonus : 1.0;
-  const fisherStabilityBonus = fisherman ? fisherman.stabilityBonus : 0;
-  const specialBonus = fisherman?.specialMethod === method.id ? 1.2 : 1.0;
+  // クルーボーナス（選択クルー全員を合算）
+  const selectedCrew = state.crew.filter(c => c.hired && state.selectedCrewIds.includes(c.id));
+  let totalCrewYieldBonus = 0;
+  let totalStabilityBonus = 0;
+  let totalEventBonus = 0;
+  let hasSpecialMethod = false;
+  for (const c of selectedCrew) {
+    const bond = state.bondLevels[c.id] ?? 0;
+    const yb = c.baseYieldBonus + c.upgradeLevel * c.yieldBonusPerLevel;
+    totalCrewYieldBonus += yb + bond * 0.02;
+    totalStabilityBonus += c.baseStabilityBonus;
+    totalEventBonus += c.baseEventBonus + bond * 0.02;
+    if (c.specialMethod === method.id) hasSpecialMethod = true;
+  }
+  const specialBonus = hasSpecialMethod ? 1.2 : 1.0;
+  const crewYieldMult = 1 + totalCrewYieldBonus;
 
   // アップグレードボーナス
   const purchasedUpgrades = state.upgrades.filter(u => u.purchased);
@@ -612,23 +631,27 @@ function calculateMonthResult(state: GameState): MonthResult {
   const priceVarianceReduction = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.priceVarianceReduction || 0), 0);
   const upgradeYieldBonus = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.yieldBonus || 0), 0);
 
+  // アップグレードの漁法特化倍率（dive-1, dive-2 等）
+  let upgradeMethodMult = 1;
+  for (const u of purchasedUpgrades) {
+    if (u.effect.methodYieldMultiplier && u.effect.methodYieldMultiplier.methodId === method.id) {
+      upgradeMethodMult *= u.effect.methodYieldMultiplier.mult;
+    }
+  }
+
   // 増員投入ボーナス
   const extraCrewBonus = state.extraCrewDeployed ? 1.2 : 1.0;
-
-  // 絆ボーナス（連続使用で最大+10%水揚げ）
-  const bondLevel = state.bondLevels[state.selectedFishermanId ?? ''] ?? 0;
-  const bondYieldBonus = 1 + bondLevel * 0.02; // 絆1→+2%, 絆5→+10%
 
   // カードの漁法・海域ボーナス
   const cardMethodMult = cardFx.methodMults[method.id] ?? 1;
   const cardAreaMult = cardFx.areaMults[area.id] ?? 1;
 
   // 水揚げ量計算
-  const baseVariance = Math.max(0.05, method.yieldVariance - fisherStabilityBonus * 0.2);
+  const baseVariance = Math.max(0.05, method.yieldVariance - totalStabilityBonus * 0.2);
   const yieldNoise = 1 + (Math.random() * 2 - 1) * baseVariance;
   const totalYieldMultiplier = dc.baseYieldMultiplier * weatherMultiplier * eventYieldMultiplier
-    * learningYieldBonus * fisherYieldBonus * specialBonus * (1 + upgradeYieldBonus)
-    * cardFx.allYieldMult * cardMethodMult * cardAreaMult * extraCrewBonus * bondYieldBonus * yieldNoise;
+    * learningYieldBonus * crewYieldMult * specialBonus * (1 + upgradeYieldBonus)
+    * upgradeMethodMult * cardFx.allYieldMult * cardMethodMult * cardAreaMult * extraCrewBonus * yieldNoise;
   const baseYield = method.baseYield * totalYieldMultiplier;
 
   // 魚種ごとの分配
@@ -660,7 +683,14 @@ function calculateMonthResult(state: GameState): MonthResult {
     // カードの価格補正（全体・レア・魚種別）
     const rarityMult = fish.rarity === 'rare' ? cardFx.rarePriceMult : 1;
     const fishPriceMult = cardFx.fishPriceMults[fish.id] ?? 1;
-    const unitPrice = Math.round(seasonalPrice * priceNoise * cardFx.allPriceMult * rarityMult * fishPriceMult);
+    // アップグレードの魚種別価格ボーナス（yield-2, dive-2等）
+    let upgradeFishPriceMult = 1;
+    for (const u of purchasedUpgrades) {
+      if (u.effect.fishPriceBonus && u.effect.fishPriceBonus.fishIds.includes(fish.id)) {
+        upgradeFishPriceMult *= u.effect.fishPriceBonus.mult;
+      }
+    }
+    const unitPrice = Math.round(seasonalPrice * priceNoise * cardFx.allPriceMult * rarityMult * fishPriceMult * upgradeFishPriceMult);
     const subtotal = quantity * unitPrice;
 
     catches.push({ fishId: fish.id, fishName: fish.name, quantity, unitPrice, subtotal });
@@ -710,8 +740,8 @@ function calculateMonthResult(state: GameState): MonthResult {
   };
 }
 
-function emptyResult(weather: Weather, interestCost: number, difficulty: Difficulty = 'normal'): MonthResult {
-  const fixedCost = getDC(difficulty).fixedCostPerMonth;
+function emptyResult(weather: Weather, interestCost: number): MonthResult {
+  const fixedCost = getConfig().fixedCostPerMonth;
   return {
     isResting: false,
     weather,
@@ -797,7 +827,7 @@ export function checkGrowth(state: GameState): GameState {
 // 次の月へ or ゲーム終了
 // ----------------------------------------
 export function proceedToNextMonth(state: GameState): GameState {
-  const dc = getDC(state.difficulty);
+  const dc = getConfig();
   // 強制終了チェック（借金返済期限切れ）
   if (state.debt > 0 && state.debtTurnsLeft === 0) {
     return { ...state, phase: 'END' };
@@ -834,6 +864,13 @@ export function purchaseUpgrade(state: GameState, upgradeId: string): GameState 
   const upgrade = state.upgrades.find(u => u.id === upgradeId);
   if (!upgrade || upgrade.purchased || state.money < upgrade.cost) return state;
 
+  // 前提アップグレードチェック
+  if (upgrade.requires) {
+    for (const reqId of upgrade.requires) {
+      if (!state.upgrades.find(u => u.id === reqId && u.purchased)) return state;
+    }
+  }
+
   // 評判ボーナス適用
   const repBonus = upgrade.effect.reputationBonus || 0;
 
@@ -865,7 +902,7 @@ export function repayDebt(state: GameState, amount: number): GameState {
 // スコア計算
 // ----------------------------------------
 export function calculateScore(state: GameState): number {
-  const difficultyMultiplier = getDC(state.difficulty).scoreMultiplier;
+  const difficultyMultiplier = getConfig().scoreMultiplier;
   const levelBonus = (state.level - 1) * 500000;
   const unlockedBonus = (state.unlockedAreas.length + state.unlockedMethods.length) * 100000;
   const reputationBonus = state.reputation * 10000;
@@ -884,4 +921,63 @@ export function isAreaRestricted(state: GameState, areaId: string): boolean {
 
 export function isMethodRestricted(state: GameState, methodId: string): boolean {
   return state.currentRegulations.some(r => r.restrictedMethods?.includes(methodId));
+}
+
+// ----------------------------------------
+// 船員雇用
+// ----------------------------------------
+export function hireCrew(state: GameState, crewId: string): GameState {
+  const member = state.crew.find(c => c.id === crewId);
+  if (!member || member.hired || state.money < member.hireCost) return state;
+  if (member.unlockLevel && member.unlockLevel > state.level) return state;
+
+  return {
+    ...state,
+    money: state.money - member.hireCost,
+    crew: state.crew.map(c => c.id === crewId ? { ...c, hired: true } : c),
+  };
+}
+
+// ----------------------------------------
+// 船員スキルアップ
+// ----------------------------------------
+export function upgradeCrew(state: GameState, crewId: string): GameState {
+  const member = state.crew.find(c => c.id === crewId);
+  if (!member || !member.hired || member.upgradeLevel >= 3) return state;
+  const cost = member.upgradeCosts[member.upgradeLevel];
+  if (state.money < cost) return state;
+
+  return {
+    ...state,
+    money: state.money - cost,
+    crew: state.crew.map(c => c.id === crewId ? { ...c, upgradeLevel: c.upgradeLevel + 1 } : c),
+  };
+}
+
+// ----------------------------------------
+// 出撃クルー選択トグル（最大3人）
+// ----------------------------------------
+export function toggleCrewSelection(state: GameState, crewId: string): GameState {
+  const member = state.crew.find(c => c.id === crewId);
+  if (!member || !member.hired) return state;
+
+  const already = state.selectedCrewIds.includes(crewId);
+  if (already) {
+    return { ...state, selectedCrewIds: state.selectedCrewIds.filter(id => id !== crewId) };
+  }
+  if (state.selectedCrewIds.length >= 3) return state;
+  return { ...state, selectedCrewIds: [...state.selectedCrewIds, crewId] };
+}
+
+// ----------------------------------------
+// クルーのイベント成功率ボーナス合計（showRoulette用）
+// ----------------------------------------
+export function getCrewEventBonus(state: GameState): number {
+  const selectedCrew = state.crew.filter(c => c.hired && state.selectedCrewIds.includes(c.id));
+  let total = 0;
+  for (const c of selectedCrew) {
+    const bond = state.bondLevels[c.id] ?? 0;
+    total += c.baseEventBonus + bond * 0.02;
+  }
+  return total;
 }

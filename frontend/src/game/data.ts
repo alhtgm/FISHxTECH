@@ -4,7 +4,7 @@
 // 卸値: 石川県水産物卸値データ
 // ========================================
 
-import type { FishingArea, FishingMethod, FishSpecies, Fisherman, Upgrade, EventTemplate, Regulation, NewsItem, ActiveChallenge, VoyageCard } from './types';
+import type { FishingArea, FishingMethod, FishSpecies, CrewMember, Upgrade, EventTemplate, Regulation, NewsItem, ActiveChallenge, VoyageCard } from './types';
 
 // ----------------------------------------
 // 海域定義（5海域）
@@ -334,99 +334,218 @@ export const FISH_SPECIES: FishSpecies[] = [
 // ----------------------------------------
 // NPC漁師（5名）
 // ----------------------------------------
-export const FISHERMEN: Fisherman[] = [
+export const CREW_MEMBERS: CrewMember[] = [
   {
     id: 'veteran',
     name: '高橋 正一（65歳）',
     description: 'ベテラン漁師。海を知り尽くした安定感が持ち味。荒天でも動じない。',
-    yieldBonus: 1.05,
-    stabilityBonus: 0.3,
-    eventBonus: 0.1,
+    icon: '👨‍🦳',
+    hireCost: 0,
+    hired: true,
+    upgradeLevel: 0,
+    upgradeCosts: [200_000, 350_000, 500_000],
+    baseYieldBonus: 0.05,
+    baseStabilityBonus: 0.3,
+    baseEventBonus: 0.10,
+    yieldBonusPerLevel: 0.02,
   },
   {
     id: 'young',
     name: '中島 海斗（24歳）',
     description: '元気いっぱいの若手。調子の良い時は誰よりも獲るが、ムラがある。',
-    yieldBonus: 1.15,
-    stabilityBonus: -0.1,
-    eventBonus: -0.05,
+    icon: '👦',
+    hireCost: 300_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [250_000, 400_000, 600_000],
+    baseYieldBonus: 0.15,
+    baseStabilityBonus: -0.1,
+    baseEventBonus: -0.05,
+    yieldBonusPerLevel: 0.05,
   },
   {
     id: 'craftsman',
     name: '岡田 富夫（52歳）',
     description: '底曳網の職人。海底の地形を熟知しており、底曳網では圧倒的な腕前。',
-    yieldBonus: 1.02,
-    stabilityBonus: 0.1,
+    icon: '⚓',
+    hireCost: 400_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [300_000, 450_000, 600_000],
+    baseYieldBonus: 0.02,
+    baseStabilityBonus: 0.1,
+    baseEventBonus: 0.0,
+    yieldBonusPerLevel: 0.03,
     specialMethod: 'bottom-trawl',
-    eventBonus: 0.0,
   },
   {
     id: 'ika-master',
     name: '松田 光雄（48歳）',
     description: 'イカ釣りの名人。集魚灯の扱いが神がかっていて、夜の漁は任せろの男。',
-    yieldBonus: 1.05,
-    stabilityBonus: 0.1,
+    icon: '🦑',
+    hireCost: 350_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [280_000, 420_000, 580_000],
+    baseYieldBonus: 0.05,
+    baseStabilityBonus: 0.1,
+    baseEventBonus: 0.05,
+    yieldBonusPerLevel: 0.03,
     specialMethod: 'squid-fishing',
-    eventBonus: 0.05,
   },
   {
     id: 'savvy',
     name: '吉田 敏子（41歳）',
     description: '元水産市場職員。市場の動向を読む目が鋭く、高値売りの機会を逃さない。',
-    yieldBonus: 0.95,
-    stabilityBonus: 0.2,
-    eventBonus: 0.15,
+    icon: '📊',
+    hireCost: 450_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [320_000, 480_000, 650_000],
+    baseYieldBonus: -0.05,
+    baseStabilityBonus: 0.2,
+    baseEventBonus: 0.15,
+    yieldBonusPerLevel: 0.03,
+  },
+  {
+    id: 'ama',
+    name: '磯山 ふみ（38歳）',
+    description: '能登の海女。素潜り漁のスペシャリスト。アワビ・ウニの採取量は県内随一。',
+    icon: '🤿',
+    hireCost: 500_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [350_000, 500_000, 700_000],
+    baseYieldBonus: 0.10,
+    baseStabilityBonus: 0.0,
+    baseEventBonus: 0.0,
+    yieldBonusPerLevel: 0.05,
+    specialMethod: 'diving',
+    unlockLevel: 4,
   },
 ];
 
 // ----------------------------------------
 // アップグレード
 // ----------------------------------------
+// スキルツリー（10アイテム）
+// ----------------------------------------
 export const UPGRADES: Upgrade[] = [
+  // ---- 情報系 Info ----
   {
-    id: 'cold-storage',
-    name: '冷蔵設備改善',
-    description: '最新の冷蔵設備で鮮度を保持。価格ブレを軽減する。',
-    cost: 500000,
-    effect: { priceVarianceReduction: 0.3 },
+    id: 'info-1',
+    name: '魚群探知機基礎',
+    description: '魚群探知機を導入。DECISIONフェーズで釣れる魚種が事前にわかるようになる。',
+    cost: 400_000,
+    effect: {},
     purchased: false,
-    unlockLevel: 2,
+    unlockLevel: 1,
+    category: 'info',
   },
   {
-    id: 'port-maintenance',
+    id: 'info-2',
+    name: '海況情報システム',
+    description: '高精度の海況データを取得。旬魚のハイライト＋天候確率を表示。',
+    cost: 800_000,
+    effect: {},
+    purchased: false,
+    unlockLevel: 2,
+    category: 'info',
+    requires: ['info-1'],
+  },
+  // ---- 効率化 Efficiency ----
+  {
+    id: 'eff-1',
     name: '港の整備',
-    description: '出港・帰港の効率化で燃料費を削減。',
-    cost: 400000,
+    description: '出港・帰港の効率化で燃料費を15%削減。',
+    cost: 500_000,
     effect: { fuelCostReduction: 0.15 },
     purchased: false,
-    unlockLevel: 2,
+    unlockLevel: 1,
+    category: 'efficiency',
   },
   {
-    id: 'info-network',
-    name: '情報網構築',
-    description: '漁協や市場との情報ネットワークを強化。水揚げ量が10%アップする。',
-    cost: 300000,
-    effect: { yieldBonus: 0.1 },
-    purchased: false,
-    unlockLevel: 3,
-  },
-  {
-    id: 'new-engine',
+    id: 'eff-2',
     name: '船舶エンジン換装',
-    description: '省燃費エンジンへの換装。燃料費をさらに削減。',
-    cost: 800000,
-    effect: { fuelCostReduction: 0.25 },
+    description: '省燃費エンジンへの換装。燃料費をさらに30%削減（合計45%）。',
+    cost: 1_500_000,
+    effect: { fuelCostReduction: 0.30 },
     purchased: false,
     unlockLevel: 3,
+    category: 'efficiency',
+    requires: ['eff-1'],
+  },
+  // ---- 収益強化 Yield ----
+  {
+    id: 'yield-1',
+    name: '冷蔵設備改善',
+    description: '最新の冷蔵設備で鮮度を保持。価格ブレを30%軽減。',
+    cost: 600_000,
+    effect: { priceVarianceReduction: 0.30 },
+    purchased: false,
+    unlockLevel: 2,
+    category: 'yield',
   },
   {
-    id: 'brand-certification',
+    id: 'yield-2',
     name: '石川ブランド認証',
-    description: '石川ブランドの認証を取得。評判上昇と単価アップ。',
-    cost: 600000,
-    effect: { yieldBonus: 0.0, reputationBonus: 15 },
+    description: '石川ブランドを取得。高級魚（のどぐろ・アワビ等）の価格が20%UP。',
+    cost: 1_800_000,
+    effect: {
+      reputationBonus: 15,
+      fishPriceBonus: { fishIds: ['nodoguro', 'awabi', 'uni', 'kano-kani', 'koubako-gani', 'ma-dai'], mult: 1.20 },
+    },
     purchased: false,
     unlockLevel: 4,
+    category: 'yield',
+    requires: ['yield-1'],
+  },
+  // ---- 市場 Market ----
+  {
+    id: 'market-1',
+    name: '情報網構築',
+    description: '漁協・市場との情報ネットワーク強化。水揚げ量が10%アップ。',
+    cost: 400_000,
+    effect: { yieldBonus: 0.1 },
+    purchased: false,
+    unlockLevel: 2,
+    category: 'market',
+  },
+  {
+    id: 'market-2',
+    name: '市場人脈',
+    description: '市場のバイヤーと太いパイプ。今月の相場トレンドを1つ表示する。',
+    cost: 1_200_000,
+    effect: {},
+    purchased: false,
+    unlockLevel: 3,
+    category: 'market',
+    requires: ['market-1'],
+  },
+  // ---- 素潜り Diving（Lv4解放）----
+  {
+    id: 'dive-1',
+    name: '海女技術向上',
+    description: '素潜り漁の技術改善。素潜りの水揚げが1.5倍になる。',
+    cost: 600_000,
+    effect: { methodYieldMultiplier: { methodId: 'diving', mult: 1.5 } },
+    purchased: false,
+    unlockLevel: 4,
+    category: 'diving',
+  },
+  {
+    id: 'dive-2',
+    name: '禁漁区特別許可',
+    description: '禁漁区の特別許可を取得。素潜り収量×2、アワビ・ウニ価格+30%。',
+    cost: 1_600_000,
+    effect: {
+      methodYieldMultiplier: { methodId: 'diving', mult: 2.0 },
+      fishPriceBonus: { fishIds: ['awabi', 'uni'], mult: 1.30 },
+    },
+    purchased: false,
+    unlockLevel: 4,
+    category: 'diving',
+    requires: ['dive-1'],
   },
 ];
 
@@ -1083,60 +1202,25 @@ export const NEWS_TEMPLATES: Array<{
 ];
 
 // ----------------------------------------
-// ゲーム定数
+// ゲーム定数（激ムズ固定パラメータ）
 // ----------------------------------------
 export const GAME_CONFIG = {
   RUNNING_DURATION: 30,            // 月内進行時間（秒）
   MAX_EVENTS_PER_MONTH: 3,         // 月最大イベント数
   LEVEL_THRESHOLDS: [0, 2000000, 5000000, 10000000, 20000000], // レベル別累積利益
-};
-
-// ----------------------------------------
-// 難易度別パラメータ
-// ----------------------------------------
-export const DIFFICULTY_CONFIG = {
-  normal: {
-    initialMoney: 3_000_000,       // 初期資金
-    fixedCostPerMonth: 250_000,    // 月次固定費（25万）
-    fuelCostPerUnit: 110_000,      // 燃料基本費
-    interestRate: 0.05,            // 月利5%
-    priceVariance: 0.15,           // 価格ブレ±15%
-    maxDebt: 5_000_000,            // 借金上限
-    debtRepayTurns: 3,             // 返済猶予ターン
-    weatherSunny: 0.42,            // 晴れ確率
-    weatherCloudy: 0.30,           // 曇り確率（残りは嵐）
-    baseYieldMultiplier: 1.0,      // 水揚げ量補正
-    scoreMultiplier: 1.0,          // スコア倍率
-    restIncome: 50_000,            // 休業時収入
-  },
-  hard: {
-    initialMoney: 3_000_000,
-    fixedCostPerMonth: 320_000,    // 月次固定費（32万）
-    fuelCostPerUnit: 140_000,      // 燃料費UP
-    interestRate: 0.08,            // 月利8%
-    priceVariance: 0.30,           // 価格ブレ±30%
-    maxDebt: 2_000_000,            // 借金上限200万
-    debtRepayTurns: 2,             // 返済猶予2ターン
-    weatherSunny: 0.35,
-    weatherCloudy: 0.27,           // 嵐が38%
-    baseYieldMultiplier: 0.85,     // 水揚げ量-15%
-    scoreMultiplier: 2.0,
-    restIncome: 20_000,
-  },
-  extreme: {
-    initialMoney: 1_500_000,       // 初期資金150万（すぐ底をつく）
-    fixedCostPerMonth: 420_000,    // 月次固定費（42万！）
-    fuelCostPerUnit: 180_000,      // 燃料費激増
-    interestRate: 0.15,            // 月利15%（借金地獄）
-    priceVariance: 0.50,           // 価格ブレ±50%（博打）
-    maxDebt: 500_000,              // 借金上限50万しか借りられない
-    debtRepayTurns: 1,             // 来月中に返済必須
-    weatherSunny: 0.20,
-    weatherCloudy: 0.30,           // 嵐が50%
-    baseYieldMultiplier: 0.60,     // 水揚げ量-40%
-    scoreMultiplier: 5.0,
-    restIncome: 0,                 // 休業しても収入ゼロ
-  },
+  // --- 激ムズ固定パラメータ ---
+  initialMoney: 1_500_000,         // 初期資金150万
+  fixedCostPerMonth: 420_000,      // 月次固定費（42万）
+  fuelCostPerUnit: 180_000,        // 燃料基本費（激増）
+  interestRate: 0.15,              // 月利15%（借金地獄）
+  priceVariance: 0.50,             // 価格ブレ±50%（博打）
+  maxDebt: 500_000,                // 借金上限50万
+  debtRepayTurns: 1,               // 返済猶予1ターン
+  weatherSunny: 0.20,              // 晴れ確率20%
+  weatherCloudy: 0.30,             // 曇り確率30%（残り50%が嵐）
+  baseYieldMultiplier: 0.60,       // 水揚げ量-40%
+  scoreMultiplier: 5.0,            // スコア倍率
+  restIncome: 0,                   // 休業しても収入ゼロ
 };
 
 // ----------------------------------------
