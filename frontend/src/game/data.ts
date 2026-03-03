@@ -4,7 +4,7 @@
 // 卸値: 石川県水産物卸値データ
 // ========================================
 
-import type { FishingArea, FishingMethod, FishSpecies, Fisherman, Upgrade, EventTemplate, Regulation, NewsItem, ActiveChallenge } from './types';
+import type { FishingArea, FishingMethod, FishSpecies, Fisherman, Upgrade, EventTemplate, Regulation, NewsItem, ActiveChallenge, VoyageCard } from './types';
 
 // ----------------------------------------
 // 海域定義（5海域）
@@ -404,9 +404,9 @@ export const UPGRADES: Upgrade[] = [
   {
     id: 'info-network',
     name: '情報網構築',
-    description: '漁協や市場との情報ネットワークを強化。ニュースの精度が上がる。',
+    description: '漁協や市場との情報ネットワークを強化。水揚げ量が10%アップする。',
     cost: 300000,
-    effect: { newsPrecision: 0.4 },
+    effect: { yieldBonus: 0.1 },
     purchased: false,
     unlockLevel: 3,
   },
@@ -431,9 +431,10 @@ export const UPGRADES: Upgrade[] = [
 ];
 
 // ----------------------------------------
-// ランダムイベントテンプレート
+// ランダムイベントテンプレート（通常イベント + クイック決断）
 // ----------------------------------------
 export const EVENT_TEMPLATES: EventTemplate[] = [
+  // ===== 通常イベント（ルーレットあり）=====
   {
     id: 'engine-trouble',
     title: '⚙️ エンジントラブル',
@@ -520,8 +521,8 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
   },
   {
     id: 'rival-info',
-    title: '🔍 ライバル会社の情報',
-    description: '「あの会社が七尾湾に集中してる。別の海域が空いてるぞ」という情報が入った。',
+    title: '🔍 ライバル「能登漁業」の情報',
+    description: '「能登漁業が七尾湾に集中している。別の海域が手薄だ」という情報が入った。',
     options: [
       {
         label: '情報に乗って移動する',
@@ -563,7 +564,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
   {
     id: 'high-price-buyer',
     title: '💰 高値買取オファー',
-    description: '大手料亭から「今すぐ500kg分を通常の1.5倍で買いたい」というオファーが来た。',
+    description: '金沢の老舗料亭「八百万」から「今すぐ500kg分を通常の1.5倍で買いたい」というオファーが来た。',
     options: [
       {
         label: '特別売りに応じる',
@@ -599,6 +600,379 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         risk: 'low',
         effect: { yieldMultiplier: 1.0, reputationDelta: 5 },
         failureEffect: { yieldMultiplier: 0.95 },
+      },
+    ],
+  },
+  // ===== 新追加：通常イベント =====
+  {
+    id: 'typhoon-warning',
+    title: '🌀 台風接近警報',
+    description: '台風が能登半島方向に向かっているとの情報が入った。海上保安庁からも警戒警報が出ている。',
+    options: [
+      {
+        label: '直ちに帰港する',
+        description: '安全優先。漁は大幅短縮になる。',
+        risk: 'low',
+        effect: { yieldMultiplier: 0.45 },
+        failureEffect: { moneyDelta: -30000, yieldMultiplier: 0.38 },
+      },
+      {
+        label: '台風の隙間を狙い続ける',
+        description: '腕があれば大漁。タイミングを外せば大損害。',
+        risk: 'high',
+        effect: { yieldMultiplier: 1.8 },
+        failureEffect: { moneyDelta: -700000, yieldMultiplier: 0.05 },
+      },
+    ],
+  },
+  {
+    id: 'media-coverage',
+    title: '📺 テレビ取材が来た！',
+    description: '地元テレビ局が「石川の漁業」特集を組んでいる。密着取材を受けるか断るか。',
+    options: [
+      {
+        label: '取材を受ける',
+        description: '放送されれば評判UP。でも気を遣って漁が乱れるかも。',
+        risk: 'medium',
+        effect: { reputationDelta: 15, yieldMultiplier: 1.1 },
+        failureEffect: { reputationDelta: 5, yieldMultiplier: 0.8 },
+      },
+      {
+        label: '断る',
+        description: '普通通りに漁に集中。余計なプレッシャーなし。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.1 },
+        failureEffect: { yieldMultiplier: 0.92 },
+      },
+    ],
+  },
+  {
+    id: 'rival-company-trouble',
+    title: '⚓ ライバル「能登漁業」がトラブル',
+    description: '能登漁業の主力船がエンジン故障。彼らのバイヤーに売り込む絶好のチャンス！',
+    options: [
+      {
+        label: 'バイヤーに積極的に売り込む',
+        description: '成功すれば新取引先を獲得。',
+        risk: 'medium',
+        effect: { moneyDelta: 300000, reputationDelta: 8 },
+        failureEffect: { moneyDelta: -80000, reputationDelta: -2 },
+      },
+      {
+        label: '通常通り操業',
+        description: '余計な動きはせず、手堅く漁をする。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.08 },
+        failureEffect: { yieldMultiplier: 0.95 },
+      },
+    ],
+  },
+  {
+    id: 'cooperative-fishing',
+    title: '🤝 近隣漁船からの協力提案',
+    description: '「一緒に魚群を追おう」と近くの漁船から提案が来た。燃料を分担して大物を狙う計画だ。',
+    options: [
+      {
+        label: '協力する',
+        description: '成功すれば倍の収穫。失敗すれば燃料費だけかかる。',
+        risk: 'medium',
+        effect: { yieldMultiplier: 1.6, moneyDelta: -60000 },
+        failureEffect: { moneyDelta: -120000, yieldMultiplier: 0.7 },
+      },
+      {
+        label: '断って単独操業',
+        description: '自分のペースで安全に。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.05 },
+        failureEffect: { yieldMultiplier: 0.9 },
+      },
+    ],
+  },
+  {
+    id: 'noto-elder-advice',
+    title: '🧙 能登の長老から伝授',
+    description: '能登半島に住む90歳の元漁師・田中翁が「今年は魚の回り方が違う」と秘密を教えてくれた。',
+    options: [
+      {
+        label: '長老の教えを信じる',
+        description: '独自のルートを試みる。当たれば大漁。',
+        risk: 'medium',
+        effect: { yieldMultiplier: 1.55, reputationDelta: 3 },
+        failureEffect: { moneyDelta: -50000, yieldMultiplier: 0.7 },
+      },
+      {
+        label: '敬意を表しつつ自分の判断で',
+        description: '安全なルートで確実に。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.08, reputationDelta: 2 },
+        failureEffect: { yieldMultiplier: 0.92 },
+      },
+    ],
+  },
+  {
+    id: 'fishing-contest',
+    title: '🏆 石川県漁業コンテスト開催！',
+    description: '漁業組合主催のコンテスト。「最高のノドグロを持ってこい」というルールだ。優勝すれば大きな注目を集める。',
+    options: [
+      {
+        label: 'コンテストに参加する',
+        description: '参加料は少しかかるが、優勝すれば評判大幅UP。',
+        risk: 'medium',
+        effect: { moneyDelta: -50000, reputationDelta: 20, yieldMultiplier: 1.2 },
+        failureEffect: { moneyDelta: -80000, reputationDelta: 3, yieldMultiplier: 0.85 },
+      },
+      {
+        label: '参加しない',
+        description: '今月は実利に集中する。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.1 },
+        failureEffect: { yieldMultiplier: 0.95 },
+      },
+    ],
+  },
+  {
+    id: 'new-equipment-test',
+    title: '🔬 新型漁具のモニター試験',
+    description: '漁具メーカーから「新型超音波魚群探知機のモニター試験をしてほしい」と依頼が来た。謝礼あり。',
+    options: [
+      {
+        label: '試験に参加する',
+        description: '謝礼と引き換えに機器を使って漁をする。',
+        risk: 'medium',
+        effect: { moneyDelta: 150000, yieldMultiplier: 1.25 },
+        failureEffect: { moneyDelta: 50000, yieldMultiplier: 0.8 },
+      },
+      {
+        label: '断る',
+        description: '実績ある機器を使い続ける。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.08 },
+        failureEffect: { yieldMultiplier: 0.95 },
+      },
+    ],
+  },
+  {
+    id: 'harbor-gossip',
+    title: '🗣️ 港の情報屋',
+    description: '「今週、特定の漁場に大群が来る」と港の情報屋が囁いた。信頼性は定かでないが代金は先払い…。',
+    options: [
+      {
+        label: '情報を買って確認する',
+        description: '情報料を払って場所を聞く。当たれば大漁。',
+        risk: 'high',
+        effect: { moneyDelta: -30000, yieldMultiplier: 1.7 },
+        failureEffect: { moneyDelta: -80000, yieldMultiplier: 0.65 },
+      },
+      {
+        label: '自分の勘で行く',
+        description: '余計なコストはかけない。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.08 },
+        failureEffect: { yieldMultiplier: 0.88 },
+      },
+    ],
+  },
+  {
+    id: 'rival-stole-spot',
+    title: '😤 能登漁業に漁場を取られた',
+    description: '狙っていた漁場に能登漁業の船が先乗りしていた！別の漁場に移動するか、強引に並んで操業するか。',
+    options: [
+      {
+        label: '別の漁場に移動する',
+        description: '燃料費はかかるが新しい漁場を探す。',
+        risk: 'medium',
+        effect: { moneyDelta: -80000, yieldMultiplier: 1.2 },
+        failureEffect: { moneyDelta: -150000, yieldMultiplier: 0.7 },
+      },
+      {
+        label: '同じ海域で粘る',
+        description: '魚は減るが移動コストなし。',
+        risk: 'low',
+        effect: { yieldMultiplier: 0.8 },
+        failureEffect: { yieldMultiplier: 0.65 },
+      },
+    ],
+  },
+  {
+    id: 'crew-accident',
+    title: '🚑 クルーが軽傷を負った',
+    description: '荒天の中、クルーの一人が軽傷を負った。病院に連れて行くか、応急処置で操業を続けるか。',
+    options: [
+      {
+        label: '港に戻り病院へ',
+        description: '安全第一。医療費と時間のロスが発生。',
+        risk: 'low',
+        effect: { moneyDelta: -120000, yieldMultiplier: 0.6, reputationDelta: 5 },
+        failureEffect: { moneyDelta: -200000, yieldMultiplier: 0.5, reputationDelta: 3 },
+      },
+      {
+        label: '応急処置で続行',
+        description: '本人が「大丈夫だ」と言っている。',
+        risk: 'high',
+        effect: { yieldMultiplier: 0.95 },
+        failureEffect: { moneyDelta: -500000, yieldMultiplier: 0.2, reputationDelta: -10 },
+      },
+    ],
+  },
+  {
+    id: 'big-wave-opportunity',
+    title: '🌊 荒波の中の大チャンス',
+    description: '嵐の影響で他の船がみんな帰港した。漁場は独り占め！でも波は相当荒い…。',
+    options: [
+      {
+        label: '独占チャンスを活かす',
+        description: '荒天だが誰もいない漁場を独占。リスク大、リターン大。',
+        risk: 'high',
+        effect: { yieldMultiplier: 2.0 },
+        failureEffect: { moneyDelta: -600000, yieldMultiplier: 0.1 },
+      },
+      {
+        label: '他の船と同様に帰港',
+        description: '安全を優先。今月は控えめな漁で終わる。',
+        risk: 'low',
+        effect: { yieldMultiplier: 0.55 },
+        failureEffect: { moneyDelta: -20000, yieldMultiplier: 0.48 },
+      },
+    ],
+  },
+  // ===== クイック航海決断（ルーレットなし・即時効果）=====
+  {
+    id: 'quick-school-spotted',
+    title: '🐟 大きな魚群を発見！',
+    description: '魚群探知機に大きな反応！追いかけますか？燃料を余分に使いますが、大量漁獲のチャンスです。',
+    isQuick: true,
+    options: [
+      {
+        label: '追いかける！（燃料+¥1万、水揚げ+25%）',
+        description: '追加コストで大量水揚げを狙う。',
+        risk: 'low',
+        effect: { moneyDelta: -10000, yieldMultiplier: 1.25 },
+      },
+      {
+        label: '様子を見る',
+        description: '今のペースを保つ。リスクなし。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.0 },
+      },
+    ],
+  },
+  {
+    id: 'quick-tide-change',
+    title: '🌊 絶好の潮目が出現！',
+    description: '絶好の潮目が出現しました。漁場内を少し移動すれば旬の魚が集まりやすい状況です。',
+    isQuick: true,
+    options: [
+      {
+        label: '潮目を追う（水揚げ+20%）',
+        description: '好条件を活かして水揚げ増。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.2 },
+      },
+      {
+        label: '現位置を維持',
+        description: '移動コストゼロ。安定を優先。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.0 },
+      },
+    ],
+  },
+  {
+    id: 'quick-bait-upgrade',
+    title: '🦐 高品質な餌を使う？',
+    description: 'クルーが「高級エビ餌を使えば高単価魚が集まりやすくなる」と提案。コストは増えますが…。',
+    isQuick: true,
+    options: [
+      {
+        label: '高級餌に変える（-¥8万、水揚げ+15%）',
+        description: '高い餌で高級魚を引き寄せる。',
+        risk: 'low',
+        effect: { moneyDelta: -80000, yieldMultiplier: 1.15 },
+      },
+      {
+        label: 'そのままで行く',
+        description: '普通の餌で通常操業。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.0 },
+      },
+    ],
+  },
+  {
+    id: 'quick-extra-hour',
+    title: '⏰ もう少し粘る？',
+    description: '漁の調子が良い。日没まであと少し粘れば追加の水揚げが見込めますが、燃料を使います。',
+    isQuick: true,
+    options: [
+      {
+        label: '粘る！（燃料+¥5万、水揚げ+18%）',
+        description: 'もう少し操業延長で追加収穫。',
+        risk: 'low',
+        effect: { moneyDelta: -50000, yieldMultiplier: 1.18 },
+      },
+      {
+        label: '帰港を早める',
+        description: '確実な今日の漁で終わる。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.0 },
+      },
+    ],
+  },
+  {
+    id: 'quick-whale-spotted',
+    title: '🐋 クジラを発見！',
+    description: 'クジラが付近を泳いでいる！クジラの後を追えば魚の大群がいる可能性が高い。',
+    isQuick: true,
+    options: [
+      {
+        label: 'クジラを追う！（水揚げ+38%）',
+        description: 'クジラは魚の群れを連れている。大漁のチャンス。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.38 },
+      },
+      {
+        label: '安全を優先して距離を置く',
+        description: 'クジラとの衝突リスクを避ける。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.02 },
+      },
+    ],
+  },
+  {
+    id: 'quick-favorable-current',
+    title: '🌀 有利な海流に突入！',
+    description: '漁場が有利な海流に入った！今すぐ網を追加投入すれば効率が大幅UP。',
+    isQuick: true,
+    options: [
+      {
+        label: '網を追加投入（水揚げ+30%）',
+        description: '海流の恩恵を最大限に活かす。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.3 },
+      },
+      {
+        label: '通常通り',
+        description: 'リスクを取らない。現状維持。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.0 },
+      },
+    ],
+  },
+  {
+    id: 'quick-crew-boost',
+    title: '💪 クルーが気合い十分！',
+    description: 'クルーの士気が最高潮！全員が「もっとやれる！」と声を上げている。増員投入しますか？',
+    isQuick: true,
+    options: [
+      {
+        label: '増員で総力戦（-¥3万、水揚げ+22%）',
+        description: '士気を活かして全力操業。',
+        risk: 'low',
+        effect: { moneyDelta: -30000, yieldMultiplier: 1.22 },
+      },
+      {
+        label: '普通のペースで',
+        description: '無理をさせない。安定した漁を続ける。',
+        risk: 'low',
+        effect: { yieldMultiplier: 1.05 },
       },
     ],
   },
@@ -775,4 +1149,156 @@ export const CHALLENGE_TEMPLATES: (Omit<ActiveChallenge, 'completed'>& { minLeve
   { id: 'million-revenue', title: '💰 百万水揚げ',  description: '水揚げ売上 ¥1,000,000 超を達成する',     rewardMoney: 300_000, rewardRep: 8,  minLevel: 4 },
   { id: 'rare-catch',      title: '🐡 希少魚ゲット',description: 'のどぐろ か アワビ を水揚げする',         rewardMoney: 200_000, rewardRep: 10, minLevel: 4 },
   { id: 'mega-profit',     title: '👑 百万超利益',  description: '¥1,000,000 以上の純利益を達成する',      rewardMoney: 600_000, rewardRep: 15, minLevel: 5 },
+];
+
+// ----------------------------------------
+// 航海カードデッキ（20枚）
+// 毎月3枚ドロー → 今月の条件が変わる
+// ----------------------------------------
+export const VOYAGE_CARDS: VoyageCard[] = [
+  // ===== 天候カード（5枚）=====
+  {
+    id: 'golden-day', title: '漁師日和', type: 'weather', rarity: 'common', icon: '☀️',
+    description: '天候が快晴に確定\n全漁法の収量＋15%',
+    effect: { weatherOverride: 'sunny', allYieldMultiplier: 1.15 },
+  },
+  {
+    id: 'storm-front', title: '嵐の前触れ', type: 'weather', rarity: 'uncommon', icon: '🌩️',
+    description: '荒天確定。定置網の収量＋70%\nその他の漁法は収量－20%',
+    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'fixed-net': 1.7, 'bottom-trawl': 0.8, 'gill-net': 0.8, 'purse-seine': 0.8, 'squid-fishing': 0.8, 'line-fishing': 0.8, 'diving': 0.5 } },
+  },
+  {
+    id: 'morning-mist', title: '霧の朝', type: 'weather', rarity: 'uncommon', icon: '🌫️',
+    description: 'くもり確定。イカ釣りの収量×2.5\nその他の漁法は収量－10%',
+    effect: { weatherOverride: 'cloudy', specificMethodMultipliers: { 'squid-fishing': 2.5, 'fixed-net': 0.9, 'bottom-trawl': 0.9, 'gill-net': 0.9, 'purse-seine': 0.9, 'line-fishing': 0.9 } },
+  },
+  {
+    id: 'calm-voyage', title: '春の凪', type: 'weather', rarity: 'common', icon: '⛵',
+    description: '穏やかな航海\n燃料費－40%',
+    effect: { fuelCostMultiplier: 0.6 },
+  },
+  {
+    id: 'north-wind', title: '北風一番', type: 'weather', rarity: 'common', icon: '💨',
+    description: 'ブリ・フクラギの価格×2.0\n（荒天リスクは通常通り）',
+    effect: { specificFishPriceMultipliers: { 'buri': 2.0, 'fukuragi': 2.0 } },
+  },
+  // ===== 市場カード（6枚）=====
+  {
+    id: 'luxury-demand', title: '高級品需要', type: 'market', rarity: 'rare', icon: '💎',
+    description: 'レア魚の価格×2.5\n（のどぐろ・アワビ・カニ類）',
+    effect: { rarePriceMultiplier: 2.5 },
+  },
+  {
+    id: 'tourism-season', title: '観光シーズン', type: 'market', rarity: 'common', icon: '🏖️',
+    description: '全魚種の価格＋35%',
+    effect: { allPriceMultiplier: 1.35 },
+  },
+  {
+    id: 'bumper-haul', title: '豊漁祭り', type: 'market', rarity: 'uncommon', icon: '🎪',
+    description: '全収量×1.5\nただし全魚価格×0.65（供給過多）',
+    effect: { allYieldMultiplier: 1.5, allPriceMultiplier: 0.65 },
+  },
+  {
+    id: 'export-boom', title: '輸出需要急騰', type: 'market', rarity: 'rare', icon: '✈️',
+    description: 'のどぐろ・アワビ・加能ガニの価格×3.5',
+    effect: { specificFishPriceMultipliers: { 'nodoguro': 3.5, 'awabi': 3.5, 'kano-kani': 3.5 } },
+  },
+  {
+    id: 'local-fish-boom', title: '地魚ブーム', type: 'market', rarity: 'uncommon', icon: '📺',
+    description: 'マイワシ・マアジ・マサバの価格×2.2',
+    effect: { specificFishPriceMultipliers: { 'ma-iwashi': 2.2, 'ma-aji': 2.2, 'ma-saba': 2.2 } },
+  },
+  {
+    id: 'market-crash', title: '相場暴落', type: 'market', rarity: 'uncommon', icon: '📉',
+    description: '全魚価格×0.5\nただし即時ボーナス＋¥200,000',
+    effect: { allPriceMultiplier: 0.5, fixedMoneyBonus: 200_000 },
+  },
+  // ===== 特殊カード（6枚）=====
+  {
+    id: 'great-migration', title: '大回遊', type: 'special', rarity: 'rare', icon: '🐟',
+    description: '旬の魚（旬係数1.2以上）の収量×2.0',
+    effect: { seasonalFishMultiplier: 2.0 },
+  },
+  {
+    id: 'lucky-tide', title: '幸運の潮', type: 'special', rarity: 'common', icon: '🌊',
+    description: 'イベント成功確率＋40%\n全収量＋10%',
+    effect: { eventSuccessBonus: 0.4, allYieldMultiplier: 1.1 },
+  },
+  {
+    id: 'cost-cut', title: '経費削減月間', type: 'special', rarity: 'common', icon: '✂️',
+    description: '固定費－50%\nただし収量×0.8',
+    effect: { fixedCostMultiplier: 0.5, allYieldMultiplier: 0.8 },
+  },
+  {
+    id: 'deep-sea-knowledge', title: '深海の知識', type: 'special', rarity: 'uncommon', icon: '🤿',
+    description: '底曳網・素潜りの収量×1.8',
+    effect: { specificMethodMultipliers: { 'bottom-trawl': 1.8, 'diving': 1.8 } },
+  },
+  {
+    id: 'bay-master', title: '湾内の達人', type: 'special', rarity: 'uncommon', icon: '⚓',
+    description: '七尾湾・加賀海域での収量×1.6',
+    effect: { specificAreaMultipliers: { 'nanao-bay': 1.6, 'kaga': 1.6 } },
+  },
+  {
+    id: 'open-sea-master', title: '外洋の猛者', type: 'special', rarity: 'uncommon', icon: '🌊',
+    description: '能登外浦・志賀海域での収量×1.7',
+    effect: { specificAreaMultipliers: { 'noto-soto': 1.7, 'shika': 1.7 } },
+  },
+  // ===== リスク・リワードカード（3枚）=====
+  {
+    id: 'big-gamble', title: '大博打', type: 'risk', rarity: 'rare', icon: '🎰',
+    description: '月利益¥50万超→ボーナス＋¥40万\n赤字→追加ペナルティ－¥30万',
+    effect: { gamblerEffect: { profitThreshold: 500_000, bonus: 400_000, penalty: -300_000 } },
+  },
+  {
+    id: 'storm-fortune', title: '嵐こそチャンス', type: 'risk', rarity: 'rare', icon: '⚡',
+    description: '荒天なら収量×2.5\n晴れ・くもりなら収量×0.65',
+    effect: { stormBonusEffect: { stormYieldMultiplier: 2.5, calmYieldPenalty: 0.65 } },
+  },
+  {
+    id: 'destiny-haul', title: '運命の一網', type: 'risk', rarity: 'uncommon', icon: '🎲',
+    description: '50%で収量×2.5（大漁！）\n50%で収量×0.3（大外れ…）',
+    effect: { fatefulEffect: { luckyMultiplier: 2.5, unluckyMultiplier: 0.3 } },
+  },
+  // ===== 新追加カード（8枚）=====
+  {
+    id: 'spring-blessing', title: '春の恵み', type: 'weather', rarity: 'uncommon', icon: '🌸',
+    description: '穏やかな春の潮流\nアマエビ・カレイの価格×1.8',
+    effect: { specificFishPriceMultipliers: { 'ama-ebi': 1.8, 'aka-garei': 1.8 } },
+  },
+  {
+    id: 'moonlight-fishing', title: '満月の夜漁', type: 'special', rarity: 'rare', icon: '🌕',
+    description: 'イカ釣りの収量×3.0\nその他漁法は収量×0.7',
+    effect: { specificMethodMultipliers: { 'squid-fishing': 3.0, 'fixed-net': 0.7, 'bottom-trawl': 0.7, 'gill-net': 0.7, 'purse-seine': 0.7, 'line-fishing': 0.7 } },
+  },
+  {
+    id: 'noto-heritage', title: '能登の誇り', type: 'special', rarity: 'uncommon', icon: '🏔️',
+    description: '能登内浦・能登外浦での収量×2.0',
+    effect: { specificAreaMultipliers: { 'noto-uchi': 2.0, 'noto-soto': 2.0 } },
+  },
+  {
+    id: 'kani-season', title: 'カニ解禁ラッシュ', type: 'market', rarity: 'rare', icon: '🦀',
+    description: '加能ガニ・香箱ガニの価格×4.0',
+    effect: { specificFishPriceMultipliers: { 'kano-kani': 4.0, 'koubako-gani': 4.0 } },
+  },
+  {
+    id: 'fuel-subsidy', title: '燃料費補助金', type: 'market', rarity: 'common', icon: '⛽',
+    description: '燃料費－70%\n固定費+20%（手続きコスト）',
+    effect: { fuelCostMultiplier: 0.3, fixedCostMultiplier: 1.2 },
+  },
+  {
+    id: 'fishing-lore', title: '漁師の知恵', type: 'special', rarity: 'common', icon: '📚',
+    description: '全収量×1.2\nイベント成功率+25%',
+    effect: { allYieldMultiplier: 1.2, eventSuccessBonus: 0.25 },
+  },
+  {
+    id: 'winter-gale', title: '冬の大時化', type: 'weather', rarity: 'rare', icon: '❄️',
+    description: '荒天確定\n底曳網の収量×2.8・カニ類価格×2.0',
+    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'bottom-trawl': 2.8 }, specificFishPriceMultipliers: { 'kano-kani': 2.0, 'koubako-gani': 2.0 } },
+  },
+  {
+    id: 'veteran-knowledge', title: 'ベテランの眼力', type: 'special', rarity: 'uncommon', icon: '👁️',
+    description: 'イカ・カニを除く全魚種の価格×1.4\n全収量×1.1',
+    effect: { allYieldMultiplier: 1.1, allPriceMultiplier: 1.4 },
+  },
 ];

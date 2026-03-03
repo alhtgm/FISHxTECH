@@ -7,13 +7,54 @@ export type GamePhase =
   | 'PROLOGUE'
   | 'SETUP'
   | 'MONTH_START'
+  | 'CARD_SELECT'
   | 'DECISION'
   | 'RUNNING'
   | 'EVENT'
   | 'RESULT'
   | 'NEWS'
   | 'GROWTH'
+  | 'YEAR_END'
   | 'END';
+
+// ========================================
+// 航海カード（Voyage Cards）
+// ========================================
+export interface VoyageCard {
+  id: string;
+  title: string;
+  description: string;
+  type: 'weather' | 'market' | 'special' | 'risk';
+  rarity: 'common' | 'uncommon' | 'rare';
+  icon: string;
+  effect: VoyageCardEffect;
+}
+
+export interface VoyageCardEffect {
+  weatherOverride?: Weather;
+  allYieldMultiplier?: number;
+  allPriceMultiplier?: number;
+  rarePriceMultiplier?: number;
+  fuelCostMultiplier?: number;
+  fixedCostMultiplier?: number;
+  fixedMoneyBonus?: number;
+  eventSuccessBonus?: number;
+  specificMethodMultipliers?: Partial<Record<string, number>>;
+  specificAreaMultipliers?: Partial<Record<string, number>>;
+  specificFishPriceMultipliers?: Partial<Record<string, number>>;
+  seasonalFishMultiplier?: number;
+  gamblerEffect?: { profitThreshold: number; bonus: number; penalty: number };
+  stormBonusEffect?: { stormYieldMultiplier: number; calmYieldPenalty: number };
+  fatefulEffect?: { luckyMultiplier: number; unluckyMultiplier: number };
+}
+
+// ========================================
+// 個人記録
+// ========================================
+export interface PersonalBests {
+  bestMonthProfit: number;
+  bestStreak: number;
+}
 
 export type Difficulty = 'normal' | 'hard' | 'extreme';
 export type Weather = 'sunny' | 'cloudy' | 'stormy';
@@ -89,7 +130,6 @@ export interface Upgrade {
 export interface UpgradeEffect {
   priceVarianceReduction?: number;  // 価格ブレ軽減
   fuelCostReduction?: number;       // 燃料費削減率
-  newsPrecision?: number;           // ニュース精度UP
   yieldBonus?: number;              // 水揚げ量UP
   reputationBonus?: number;         // 評価UP
 }
@@ -104,6 +144,7 @@ export interface EventTemplate {
   applicableAreas?: string[];  // nullなら全海域
   applicableMethods?: string[];
   options: EventOption[];
+  isQuick?: boolean;  // true=クイック決断（ルーレットなし・即時効果）
 }
 
 export interface EventOption {
@@ -118,7 +159,6 @@ export interface EventEffect {
   moneyDelta?: number;            // 即時資金変動
   yieldMultiplier?: number;       // 月末水揚げ補正
   nextWeatherBonus?: boolean;     // 次月天候耐性
-  newsPrecisionBonus?: boolean;   // 次月ニュース精度UP
   reputationDelta?: number;       // 評価変動
 }
 
@@ -176,7 +216,9 @@ export interface MonthResult {
   profit: number;          // 利益
   yieldMultiplier: number; // イベントによる水揚げ補正（最終）
   events: ScheduledEvent[];
-  learningKey?: string;    // 失敗ログのキー
+  cardBonusDelta: number;     // 航海カードによる追加損益
+  fatefulWasLucky?: boolean;  // 運命の一網の結果
+  effectiveWeather: Weather;  // カード適用後の実効天候
 }
 
 // ========================================
@@ -262,6 +304,25 @@ export interface GameState {
 
   // 月間チャレンジ
   currentChallenge: ActiveChallenge | null;
+
+  // 航海カード
+  currentVoyageCards: VoyageCard[];
+  voyageCardDeck: VoyageCard[];     // CARD_SELECT中の5枚候補
+
+  // 漁師絆
+  bondLevels: Record<string, number>; // fisherman id → 0〜5
+
+  // New Game+ / 年度制
+  runNumber: number;           // 1=初回, 2+=NG+
+  yearFuelMultiplier: number;  // 年度ごとに燃料コスト上昇
+  yearFixedMultiplier: number; // 年度ごとに固定費上昇
+
+  // 個人記録
+  personalBests: PersonalBests;
+  consecutiveProfitMonths: number;
+
+  // RUNNING強化
+  extraCrewDeployed: boolean;  // 増員投入済みか
 
   // ストーリー・チュートリアル
   prologueSlide: number;    // プロローグの現在スライド番号

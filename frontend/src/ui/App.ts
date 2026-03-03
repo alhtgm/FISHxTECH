@@ -15,6 +15,7 @@ import {
   prepareOperation, advanceDay, resolveEvent, finishMonth,
   checkGrowth, proceedToNextMonth, purchaseUpgrade, calculateScore,
   isAreaRestricted, isMethodRestricted,
+  enterCardSelect, toggleVoyageCard, confirmVoyageCards,
 } from '../game/engine';
 import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN, GAME_CONFIG, DIFFICULTY_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
@@ -155,6 +156,7 @@ export class App {
   private getBGMScene(phase: GamePhase): BGMScene {
     switch (phase) {
       case 'INIT': case 'PROLOGUE': case 'SETUP': case 'MONTH_START': return 'exploration';
+      case 'CARD_SELECT': return 'decision';
       case 'DECISION': return 'decision';
       case 'RUNNING': case 'EVENT':
         return this.state.currentWeather === 'stormy' ? 'storm' : 'sailing';
@@ -186,6 +188,12 @@ export class App {
     if (phase === 'SETUP') {
       this.root.innerHTML = this.renderSetup();
       this.bindSetup();
+      return;
+    }
+    // 航海カード選択
+    if (phase === 'CARD_SELECT') {
+      this.root.innerHTML = this.renderCardSelect();
+      this.bindCardSelect();
       return;
     }
     // 操業中
@@ -284,6 +292,101 @@ export class App {
       this.bgmStarted = true;
       audioManager.playSE('decision');
       this.setState(s => startGame(s));
+    });
+  }
+
+  // ========================================
+  // 航海カード選択（CARD_SELECT フェーズ）
+  // ========================================
+  private renderCardSelect(): string {
+    const { voyageCardDeck, currentVoyageCards, month } = this.state;
+    const selectedIds = new Set(currentVoyageCards.map(c => c.id));
+    const typeColors: Record<string, string> = {
+      weather: 'card-type-weather',
+      market: 'card-type-market',
+      special: 'card-type-special',
+      risk: 'card-type-risk',
+    };
+    const rarityStars: Record<string, string> = {
+      common: '★☆☆',
+      uncommon: '★★☆',
+      rare: '★★★',
+    };
+    const rarityLabels: Record<string, string> = {
+      common: 'コモン',
+      uncommon: 'アンコモン',
+      rare: 'レア',
+    };
+
+    const cardsHtml = voyageCardDeck.map((card, i) => {
+      const isSelected = selectedIds.has(card.id);
+      const canSelect = isSelected || selectedIds.size < 3;
+      return `
+      <div class="voyage-card ${typeColors[card.type] ?? ''} ${isSelected ? 'voyage-card-selected' : ''} ${!canSelect ? 'voyage-card-disabled' : ''}"
+           data-card-id="${card.id}"
+           style="animation-delay: ${i * 0.1}s">
+        <div class="voyage-card-rarity ${card.rarity}">${rarityStars[card.rarity]}</div>
+        <div class="voyage-card-icon">${card.icon}</div>
+        <div class="voyage-card-title">${card.title}</div>
+        <div class="voyage-card-type-label">${{ weather: '天候', market: '市場', special: '特殊', risk: 'リスク' }[card.type] ?? ''} / ${rarityLabels[card.rarity]}</div>
+        <div class="voyage-card-desc">${card.description.replace(/\n/g, '<br>')}</div>
+        ${isSelected ? '<div class="voyage-card-check">✓ 選択中</div>' : ''}
+      </div>`;
+    }).join('');
+
+    const selectedCount = selectedIds.size;
+    const canConfirm = selectedCount >= 1;
+
+    return `
+    <div id="card-select-screen">
+      <div class="card-select-bg">
+        <div class="card-select-container">
+          <div class="card-select-header">
+            <div class="card-select-title">⚓ ${month}月の航海カード</div>
+            <div class="card-select-subtitle">5枚の中から3枚を選んでください。今月の漁に特別な効果をもたらします。</div>
+          </div>
+          <div class="card-select-counter">
+            <span class="counter-current">${selectedCount}</span>
+            <span class="counter-slash"> / </span>
+            <span class="counter-max">3</span>
+            <span class="counter-label"> 枚選択中</span>
+          </div>
+          <div class="voyage-cards-grid">${cardsHtml}</div>
+          <div class="card-select-actions">
+            <button id="card-select-random-btn" class="card-random-btn">
+              🎲 ランダムに選ぶ
+            </button>
+            <button id="card-select-confirm-btn" class="card-confirm-btn" ${canConfirm ? '' : 'disabled'}>
+              ${selectedCount >= 3 ? '✓ この3枚で決定！' : selectedCount > 0 ? `${selectedCount}枚選択（残り${3 - selectedCount}枚をランダム補完）` : '少なくとも1枚選んでください'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  private bindCardSelect() {
+    audioManager.playSE('decision');
+
+    document.querySelectorAll('[data-card-id]').forEach(el => {
+      el.addEventListener('click', () => {
+        const cardId = (el as HTMLElement).dataset.cardId!;
+        audioManager.playSE('select');
+        this.state = toggleVoyageCard(this.state, cardId);
+        // 再レンダリング（カード選択UIのみ）
+        this.root.innerHTML = this.renderCardSelect();
+        this.bindCardSelect();
+      });
+    });
+
+    document.getElementById('card-select-random-btn')?.addEventListener('click', () => {
+      audioManager.playSE('select');
+      this.setState(s => confirmVoyageCards({ ...s, currentVoyageCards: [] }));
+    });
+
+    document.getElementById('card-select-confirm-btn')?.addEventListener('click', () => {
+      audioManager.playSE('decision');
+      this.setState(s => confirmVoyageCards(s));
     });
   }
 
@@ -466,7 +569,7 @@ export class App {
       </div>`;
     }).join('');
 
-    // 漁師カード（詳細ステータス表示）
+    // 漁師カード（詳細ステータス表示 + 絆レベル）
     const fishermenHtml = FISHERMEN.map(f => {
       const yieldPct = Math.round((f.yieldBonus - 1) * 100);
       const stabilityLabel = f.stabilityBonus >= 0.2 ? '高' : f.stabilityBonus >= 0 ? '中' : '低';
@@ -475,10 +578,17 @@ export class App {
       const specialBadge = f.specialMethod
         ? `<div class="npc-specialty-badge">${FISHING_METHODS.find(m => m.id === f.specialMethod)?.icon ?? ''} ${FISHING_METHODS.find(m => m.id === f.specialMethod)?.name ?? ''} 専門</div>`
         : '';
+      const bond = this.state.bondLevels[f.id] ?? 0;
+      const bondHearts = '♥'.repeat(bond) + '♡'.repeat(5 - bond);
+      const bondBonus = bond > 0 ? `+${bond * 2}%` : '';
       return `
       <div class="npc-card ${selectedFishermanId === f.id ? 'selected' : ''}" data-fisher="${f.id}"
         ${!isDecision ? 'style="pointer-events:none"' : ''}>
         <div class="npc-name">${f.name}</div>
+        <div class="npc-bond" title="絆レベル ${bond}/5（水揚げ+${bond * 2}%ボーナス）">
+          <span class="bond-hearts">${bondHearts}</span>
+          ${bondBonus ? `<span class="bond-bonus">${bondBonus}</span>` : ''}
+        </div>
         <div class="npc-stats">
           <div class="npc-stat-row">
             <span class="npc-stat-label">水揚げ</span>
@@ -659,7 +769,7 @@ export class App {
     audioManager.playSE('monthstart');
     document.getElementById('to-decision-btn')?.addEventListener('click', () => {
       audioManager.playSE('click');
-      this.setState(s => setPhase(s, 'DECISION'));
+      this.setState(s => enterCardSelect(s));
     });
   }
 
@@ -1243,12 +1353,39 @@ export class App {
   }
 
   // ========================================
-  // イベントモーダル
+  // イベントモーダル（通常 / クイック決断 の2種）
   // ========================================
   private renderEventModal(): string {
     const eventIdx = this.state.currentEventIndex;
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return '';
+
+    const isQuick = event.template.isQuick ?? false;
+
+    if (isQuick) {
+      // クイック決断：即時効果・ルーレットなし
+      const optionsHtml = event.template.options.map((opt, i) => {
+        const effDesc = this.describeEffect(opt.effect);
+        return `
+        <button class="quick-option-btn" data-option="${i}">
+          <div class="quick-option-label">${opt.label}</div>
+          <div class="quick-option-effect">${effDesc}</div>
+        </button>`;
+      }).join('');
+
+      return `
+      <div class="modal-overlay quick-overlay">
+        <div class="quick-decision-modal">
+          <div class="quick-decision-day">⚡ ${event.day}日目 — 判断タイム！</div>
+          <div class="quick-decision-title">${event.template.title}</div>
+          <div class="quick-decision-body">${event.template.description}</div>
+          <div class="quick-decision-options">${optionsHtml}</div>
+          <div class="quick-decision-hint">※ どちらを選んでも漁は継続します</div>
+        </div>
+      </div>`;
+    }
+
+    // 通常イベント：ルーレットあり
     const optionsHtml = event.template.options.map((opt, i) => `
       <button class="event-option-btn" data-option="${i}">
         <div class="event-option-label">
@@ -1273,14 +1410,29 @@ export class App {
     const eventIdx = this.state.currentEventIndex;
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return;
-    document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
-      btn.addEventListener('click', () => {
-        const option = event.template.options[i];
-        this.showRoulette(option, (success) => {
-          this.setState(s => resolveEvent(s, option, success));
+
+    const isQuick = event.template.isQuick ?? false;
+
+    if (isQuick) {
+      // クイック決断：即時適用（ルーレットなし）
+      document.querySelectorAll('.quick-option-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+          const option = event.template.options[i];
+          audioManager.playSE('select');
+          this.setState(s => resolveEvent(s, option, true));
         });
       });
-    });
+    } else {
+      // 通常イベント：ルーレット
+      document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
+        btn.addEventListener('click', () => {
+          const option = event.template.options[i];
+          this.showRoulette(option, (success) => {
+            this.setState(s => resolveEvent(s, option, success));
+          });
+        });
+      });
+    }
   }
 
   // ========================================
@@ -1291,7 +1443,9 @@ export class App {
     const baseRate = successRates[option.risk] ?? 0.5;
 
     const fisherman = this.state.fishermen.find(f => f.id === this.state.selectedFishermanId);
-    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + (fisherman?.eventBonus ?? 0)));
+    const bondLevel = this.state.bondLevels[this.state.selectedFishermanId ?? ''] ?? 0;
+    const bondSuccessBonus = bondLevel * 0.02; // 絆1につき+2%成功率
+    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + (fisherman?.eventBonus ?? 0) + bondSuccessBonus));
     const finalSuccess = Math.random() < adjustedRate;
 
     const greenPct = Math.round(adjustedRate * 100);
@@ -1316,8 +1470,9 @@ export class App {
     const spinDuration = 2.0 + spins * 0.25;
 
     const riskLabel = option.risk === 'low' ? '低リスク' : option.risk === 'medium' ? '中リスク' : '⚠️ 高リスク';
-    const fisherBonus = fisherman && fisherman.eventBonus !== 0
-      ? `<span class="roulette-fisher-bonus ${fisherman.eventBonus > 0 ? 'positive' : 'negative'}">${fisherman.name.split('（')[0]}: ${fisherman.eventBonus > 0 ? '+' : ''}${Math.round(fisherman.eventBonus * 100)}%補正</span>`
+    const totalBonus = (fisherman?.eventBonus ?? 0) + bondSuccessBonus;
+    const fisherBonus = totalBonus !== 0
+      ? `<span class="roulette-fisher-bonus ${totalBonus > 0 ? 'positive' : 'negative'}">${fisherman?.name.split('（')[0] ?? ''}${bondLevel > 0 ? ` ♥×${bondLevel}` : ''}: ${totalBonus > 0 ? '+' : ''}${Math.round(totalBonus * 100)}%補正</span>`
       : '';
 
     const overlay = document.createElement('div');

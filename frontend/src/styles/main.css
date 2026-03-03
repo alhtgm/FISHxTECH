@@ -1483,3 +1483,206 @@ html, body {
   100% { box-shadow: 0 0 0 0 rgba(46,196,182,0); }
 }
 .panel-unlocked .select-item:not(.locked) { animation: unlockPulse 1.5s ease-out; }
+
+/* ========================================
+   CARD SELECT フェーズ
+   ======================================== */
+#card-select-screen {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 60%, #071b3a 0%, #020d1e 100%);
+  overflow: hidden;
+}
+.card-select-bg {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background-image:
+    radial-gradient(circle at 20% 80%, rgba(16,208,245,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(61,219,168,0.05) 0%, transparent 50%);
+}
+.card-select-container {
+  width: 100%; max-width: 1100px;
+  padding: 20px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.card-select-header { text-align: center; }
+.card-select-title {
+  font-size: 1.6rem; font-weight: 700;
+  background: linear-gradient(90deg, #ffb347, #10d0f5);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+}
+.card-select-subtitle { font-size: 0.85rem; color: var(--text-secondary); }
+.card-select-counter {
+  font-size: 1.1rem; font-weight: 700;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: 20px; padding: 6px 20px;
+}
+.counter-current { font-size: 1.5rem; color: var(--accent-gold); }
+.counter-slash, .counter-max { color: var(--text-muted); }
+.counter-label { color: var(--text-secondary); font-size: 0.85rem; }
+
+/* カードグリッド */
+.voyage-cards-grid {
+  display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+  width: 100%;
+}
+
+/* 航海カード */
+.voyage-card {
+  width: 180px; min-height: 240px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 14px;
+  padding: 14px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  animation: cardReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+  position: relative;
+  user-select: none;
+}
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(24px) rotateX(20deg); }
+  to   { opacity: 1; transform: translateY(0) rotateX(0); }
+}
+.voyage-card:hover:not(.voyage-card-disabled) {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+}
+.voyage-card-selected {
+  border-color: var(--accent-gold) !important;
+  box-shadow: 0 0 20px rgba(255,179,71,0.4);
+  transform: translateY(-4px);
+}
+.voyage-card-disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* カードタイプカラー */
+.card-type-weather { border-color: rgba(16,208,245,0.4); }
+.card-type-market  { border-color: rgba(255,179,71,0.4); }
+.card-type-special { border-color: rgba(61,219,168,0.4); }
+.card-type-risk    { border-color: rgba(255,71,87,0.4); }
+.card-type-weather:hover:not(.voyage-card-disabled) { border-color: var(--accent-primary); }
+.card-type-market:hover:not(.voyage-card-disabled)  { border-color: var(--accent-gold); }
+.card-type-special:hover:not(.voyage-card-disabled) { border-color: var(--accent-green); }
+.card-type-risk:hover:not(.voyage-card-disabled)    { border-color: var(--accent-red); }
+
+.voyage-card-rarity {
+  font-size: 0.65rem; letter-spacing: 2px;
+  position: absolute; top: 8px; left: 10px;
+}
+.voyage-card-rarity.rare    { color: var(--accent-gold); }
+.voyage-card-rarity.uncommon { color: var(--accent-purple); }
+.voyage-card-rarity.common  { color: var(--text-muted); }
+
+.voyage-card-icon { font-size: 2.2rem; line-height: 1; margin-top: 12px; }
+.voyage-card-title {
+  font-size: 0.92rem; font-weight: 700; text-align: center;
+  color: var(--text-primary);
+}
+.voyage-card-type-label {
+  font-size: 0.62rem; color: var(--text-muted); text-align: center;
+}
+.voyage-card-desc {
+  font-size: 0.72rem; color: var(--text-secondary);
+  text-align: center; line-height: 1.5; flex: 1;
+}
+.voyage-card-check {
+  font-size: 0.7rem; font-weight: 700;
+  color: var(--accent-gold);
+  background: rgba(255,179,71,0.12);
+  border: 1px solid rgba(255,179,71,0.4);
+  border-radius: 10px; padding: 2px 10px;
+}
+
+/* カード選択ボタン */
+.card-select-actions {
+  display: flex; gap: 16px; margin-top: 8px;
+}
+.card-random-btn {
+  padding: 10px 24px; border-radius: 10px; border: 1px solid var(--border-color);
+  background: var(--bg-card); color: var(--text-secondary);
+  font-size: 0.85rem; cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.card-random-btn:hover { background: var(--bg-highlight); color: var(--text-primary); }
+.card-confirm-btn {
+  padding: 12px 32px; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, #ffb347, #f9a03c);
+  color: #1a0d00; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(255,179,71,0.3);
+}
+.card-confirm-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(255,179,71,0.45); }
+.card-confirm-btn:disabled { opacity: 0.45; cursor: not-allowed; background: var(--bg-card); color: var(--text-muted); box-shadow: none; }
+
+/* ========================================
+   クイック決断モーダル
+   ======================================== */
+.quick-overlay .quick-decision-modal {
+  background: linear-gradient(135deg, #0e2040 0%, #122b4a 100%);
+  border: 2px solid rgba(16,208,245,0.5);
+  border-radius: 16px;
+  padding: 24px 28px;
+  max-width: 460px;
+  width: 90vw;
+  box-shadow: 0 0 40px rgba(16,208,245,0.15);
+  animation: quickPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes quickPop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.quick-decision-day {
+  font-size: 0.75rem; color: var(--accent-primary);
+  font-weight: 700; margin-bottom: 8px; letter-spacing: 0.5px;
+}
+.quick-decision-title {
+  font-size: 1.15rem; font-weight: 700; margin-bottom: 10px;
+  color: var(--text-primary);
+}
+.quick-decision-body {
+  font-size: 0.82rem; color: var(--text-secondary);
+  line-height: 1.6; margin-bottom: 16px;
+}
+.quick-decision-options { display: flex; flex-direction: column; gap: 10px; }
+.quick-option-btn {
+  background: var(--bg-highlight);
+  border: 1px solid var(--border-color);
+  border-radius: 10px; padding: 12px 16px;
+  text-align: left; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  width: 100%;
+}
+.quick-option-btn:hover {
+  border-color: var(--accent-primary);
+  background: rgba(16,208,245,0.06);
+  transform: translateX(4px);
+}
+.quick-option-label {
+  font-size: 0.88rem; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;
+}
+.quick-option-effect {
+  font-size: 0.75rem; color: var(--accent-green); font-weight: 500;
+}
+.quick-decision-hint {
+  font-size: 0.68rem; color: var(--text-muted); margin-top: 12px; text-align: center;
+}
+
+/* ========================================
+   漁師絆ハート表示
+   ======================================== */
+.npc-bond {
+  display: flex; align-items: center; gap: 6px; margin: 2px 0 4px;
+}
+.bond-hearts {
+  font-size: 0.78rem; letter-spacing: 1px;
+  color: #e57373;
+}
+.bond-bonus {
+  font-size: 0.65rem; color: var(--accent-green);
+  background: rgba(61,219,168,0.12);
+  border: 1px solid rgba(61,219,168,0.3);
+  border-radius: 8px; padding: 1px 5px;
+  font-weight: 600;
+}

@@ -5,11 +5,12 @@
 import type {
   GameState, GamePhase, Weather, MonthResult, CatchRecord,
   ScheduledEvent, EventOption, LearningBonus, LogEntry, ActiveChallenge,
+  VoyageCard,
 } from './types';
 import {
   FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, FISHERMEN,
   UPGRADES, EVENT_TEMPLATES, REGULATIONS, NEWS_TEMPLATES, GAME_CONFIG, DIFFICULTY_CONFIG,
-  CHALLENGE_TEMPLATES,
+  CHALLENGE_TEMPLATES, VOYAGE_CARDS,
 } from './data';
 import type { Difficulty } from './types';
 
@@ -55,11 +56,165 @@ export function createInitialState(): GameState {
     totalProfit: 0,
     totalRevenue: 0,
 
+    currentVoyageCards: [],
+    voyageCardDeck: [],
+    bondLevels: {},
+    runNumber: 1,
+    yearFuelMultiplier: 1.0,
+    yearFixedMultiplier: 1.0,
+    personalBests: { bestMonthProfit: 0, bestStreak: 0 },
+    consecutiveProfitMonths: 0,
+    extraCrewDeployed: false,
+
     prologueSlide: 0,
     storyBeatSeen: false,
     tutorialStep: 0,
     currentChallenge: null,
   };
+}
+
+// ----------------------------------------
+// 航海カードドロー（毎月n枚）
+// ----------------------------------------
+function drawVoyageCardDeck(n: number): VoyageCard[] {
+  const deck = [...VOYAGE_CARDS];
+  const drawn: VoyageCard[] = [];
+  for (let i = 0; i < n && deck.length > 0; i++) {
+    const idx = Math.floor(Math.random() * deck.length);
+    drawn.push(deck.splice(idx, 1)[0]);
+  }
+  return drawn;
+}
+
+// ----------------------------------------
+// カード効果集約
+// ----------------------------------------
+function getCardFx(cards: VoyageCard[], weather: Weather) {
+  const weatherOverride = cards.map(c => c.effect.weatherOverride).find(w => w !== undefined);
+  const effectiveWeather = weatherOverride ?? weather;
+
+  let allYieldMult = cards.reduce((acc, c) => acc * (c.effect.allYieldMultiplier ?? 1), 1);
+
+  // 嵐こそチャンスカード（収量補正のみここで適用）
+  const stormCard = cards.find(c => c.effect.stormBonusEffect);
+  if (stormCard?.effect.stormBonusEffect) {
+    const se = stormCard.effect.stormBonusEffect;
+    allYieldMult *= effectiveWeather === 'stormy' ? se.stormYieldMultiplier : se.calmYieldPenalty;
+  }
+
+  // 運命の一網（ここでロールして決定）
+  const fatefulCard = cards.find(c => c.effect.fatefulEffect);
+  let fatefulMult = 1;
+  let fatefulWasLucky: boolean | undefined;
+  if (fatefulCard?.effect.fatefulEffect) {
+    fatefulWasLucky = Math.random() < 0.5;
+    fatefulMult = fatefulWasLucky
+      ? fatefulCard.effect.fatefulEffect.luckyMultiplier
+      : fatefulCard.effect.fatefulEffect.unluckyMultiplier;
+    allYieldMult *= fatefulMult;
+  }
+
+  const methodMults: Record<string, number> = {};
+  for (const c of cards) {
+    if (c.effect.specificMethodMultipliers) {
+      for (const [id, mult] of Object.entries(c.effect.specificMethodMultipliers)) {
+        if (mult !== undefined) methodMults[id] = (methodMults[id] ?? 1) * mult;
+      }
+    }
+  }
+  const areaMults: Record<string, number> = {};
+  for (const c of cards) {
+    if (c.effect.specificAreaMultipliers) {
+      for (const [id, mult] of Object.entries(c.effect.specificAreaMultipliers)) {
+        if (mult !== undefined) areaMults[id] = (areaMults[id] ?? 1) * mult;
+      }
+    }
+  }
+  const fishPriceMults: Record<string, number> = {};
+  for (const c of cards) {
+    if (c.effect.specificFishPriceMultipliers) {
+      for (const [id, mult] of Object.entries(c.effect.specificFishPriceMultipliers)) {
+        if (mult !== undefined) fishPriceMults[id] = (fishPriceMults[id] ?? 1) * mult;
+      }
+    }
+  }
+
+  return {
+    effectiveWeather,
+    allYieldMult,
+    allPriceMult: cards.reduce((acc, c) => acc * (c.effect.allPriceMultiplier ?? 1), 1),
+    rarePriceMult: cards.reduce((acc, c) => acc * (c.effect.rarePriceMultiplier ?? 1), 1),
+    fuelMult: cards.reduce((acc, c) => acc * (c.effect.fuelCostMultiplier ?? 1), 1),
+    fixedCostMult: cards.reduce((acc, c) => acc * (c.effect.fixedCostMultiplier ?? 1), 1),
+    fixedBonus: cards.reduce((acc, c) => acc + (c.effect.fixedMoneyBonus ?? 0), 0),
+    eventSuccessBonus: cards.reduce((acc, c) => acc + (c.effect.eventSuccessBonus ?? 0), 0),
+    seasonalMult: cards.reduce((acc, c) => acc * (c.effect.seasonalFishMultiplier ?? 1), 1),
+    methodMults,
+    areaMults,
+    fishPriceMults,
+    gamblerEffect: cards.find(c => c.effect.gamblerEffect)?.effect.gamblerEffect,
+    fatefulWasLucky,
+  };
+}
+
+// ========================================
+// New Game+ 開始（年度継続）
+// ========================================
+export function startNewYear(state: GameState): GameState {
+  const carryover = Math.round(state.money * 0.4);
+  const newRun = state.runNumber + 1;
+  const dc = getDC(state.difficulty);
+  const fuelMult = 1 + (newRun - 1) * 0.15;
+  const fixedMult = 1 + (newRun - 1) * 0.12;
+
+  return startMonth({
+    ...createInitialState(),
+    companyName: state.companyName,
+    difficulty: state.difficulty,
+    money: dc.initialMoney * 0.3 + carryover,
+    upgrades: state.upgrades,
+    unlockedAreas: ['kaga', 'nanao-bay'],
+    unlockedMethods: ['fixed-net', 'bottom-trawl', 'gill-net'],
+    reputation: Math.round(state.reputation * 0.5),
+    level: 1,
+    runNumber: newRun,
+    yearFuelMultiplier: fuelMult,
+    yearFixedMultiplier: fixedMult,
+    personalBests: state.personalBests,
+    bondLevels: state.bondLevels, // 絆は引き継ぐ
+    consecutiveProfitMonths: 0,
+    tutorialStep: -1,
+    phase: 'MONTH_START',
+    month: 1,
+  });
+}
+
+// ----------------------------------------
+// 航海カード選択（CARD_SELECT フェーズ）
+// ----------------------------------------
+export function enterCardSelect(state: GameState): GameState {
+  return { ...state, phase: 'CARD_SELECT' };
+}
+
+export function toggleVoyageCard(state: GameState, cardId: string): GameState {
+  const card = state.voyageCardDeck.find(c => c.id === cardId);
+  if (!card) return state;
+  const alreadySelected = state.currentVoyageCards.some(c => c.id === cardId);
+  if (alreadySelected) {
+    return { ...state, currentVoyageCards: state.currentVoyageCards.filter(c => c.id !== cardId) };
+  }
+  if (state.currentVoyageCards.length >= 3) return state;
+  return { ...state, currentVoyageCards: [...state.currentVoyageCards, card] };
+}
+
+export function confirmVoyageCards(state: GameState): GameState {
+  let selected = [...state.currentVoyageCards];
+  if (selected.length < 3) {
+    const remaining = state.voyageCardDeck.filter(c => !selected.some(s => s.id === c.id));
+    const shuffled = remaining.sort(() => Math.random() - 0.5);
+    selected.push(...shuffled.slice(0, 3 - selected.length));
+  }
+  return { ...state, phase: 'DECISION', currentVoyageCards: selected };
 }
 
 // ----------------------------------------
@@ -121,6 +276,8 @@ export function startMonth(state: GameState): GameState {
   const newsTemplate = NEWS_TEMPLATES.find(n => n.month === state.month);
   const news = newsTemplate ? newsTemplate.items : [];
   const challenge = generateChallenge(state.level, weather);
+  // 5枚ドロー→CARD_SELECTフェーズでプレイヤーが3枚を選ぶ
+  const voyageCardDeck = drawVoyageCardDeck(5);
 
   return {
     ...state,
@@ -129,6 +286,8 @@ export function startMonth(state: GameState): GameState {
     currentRegulations: regulations,
     currentNews: news,
     currentChallenge: challenge,
+    voyageCardDeck,
+    currentVoyageCards: [], // CARD_SELECTで選択するまで空
     selectedAreaId: null,
     selectedMethodId: null,
     isResting: false,
@@ -137,6 +296,7 @@ export function startMonth(state: GameState): GameState {
     currentEventIndex: 0,
     monthResult: null,
     storyBeatSeen: false,
+    extraCrewDeployed: false,
   };
 }
 
@@ -173,12 +333,18 @@ export function prepareOperation(state: GameState): GameState {
     return { ...state, scheduledEvents: [], currentEventIndex: 0 };
   }
 
-  // 最低1件のイベントを保証（ノーマル含む全難易度）
-  const eventCount = 1 + Math.floor(Math.random() * GAME_CONFIG.MAX_EVENTS_PER_MONTH);
-  const days = pickUniqueDays(eventCount, 3, 27); // 3日〜27日にランダム配置
-  const templates = pickRandomEventTemplates(eventCount, state);
+  // 通常イベント（ルーレットあり）: 1件
+  const regularTemplates = EVENT_TEMPLATES.filter(e => !e.isQuick);
+  const regularPick = pickRandomFromPool(regularTemplates, 1);
 
-  const scheduled: ScheduledEvent[] = templates.map((t, i) => ({
+  // クイック決断: 2件（常に発生して操業中の動きを作る）
+  const quickTemplates = EVENT_TEMPLATES.filter(e => e.isQuick === true);
+  const quickPick = pickRandomFromPool(quickTemplates, 2);
+
+  const allTemplates = [...regularPick, ...quickPick];
+  const days = pickUniqueDays(allTemplates.length, 5, 26);
+
+  const scheduled: ScheduledEvent[] = allTemplates.map((t, i) => ({
     day: days[i],
     template: t,
     resolved: false,
@@ -202,14 +368,9 @@ function pickUniqueDays(count: number, min: number, max: number): number[] {
   return Array.from(days).sort((a, b) => a - b);
 }
 
-function pickRandomEventTemplates(count: number, state: GameState) {
-  const pool = [...EVENT_TEMPLATES];
-  const result = [];
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    result.push(pool.splice(idx, 1)[0]);
-  }
-  return result;
+function pickRandomFromPool<T>(pool: T[], count: number): T[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
 // ----------------------------------------
@@ -337,6 +498,13 @@ export function finishMonth(state: GameState): GameState {
     },
   ];
 
+  // 漁師絆レベル更新（操業した月は+1）
+  const bondLevels = { ...state.bondLevels };
+  if (!state.isResting && state.selectedFishermanId) {
+    const current = bondLevels[state.selectedFishermanId] ?? 0;
+    bondLevels[state.selectedFishermanId] = Math.min(5, current + 1);
+  }
+
   return {
     ...state,
     phase: 'RESULT',
@@ -351,6 +519,7 @@ export function finishMonth(state: GameState): GameState {
     monthHistory: [...state.monthHistory, result],
     learningBonuses,
     currentChallenge,
+    bondLevels,
     log,
   };
 }
@@ -371,20 +540,27 @@ function calculateMonthResult(state: GameState): MonthResult {
   const { selectedAreaId, selectedMethodId, isResting, currentWeather, difficulty } = state;
   const dc = getDC(difficulty);
 
+  // 航海カード効果を集約
+  const cardFx = getCardFx(state.currentVoyageCards, currentWeather);
+  const effectiveWeather = cardFx.effectiveWeather;
+
   if (isResting) {
     const ic = calcInterest(state);
+    const fixedCost = Math.round(dc.fixedCostPerMonth * state.yearFixedMultiplier);
     return {
       isResting: true,
-      weather: currentWeather,
+      weather: effectiveWeather,
       catches: [],
       totalRevenue: 0,
       fuelCost: 0,
-      fixedCost: dc.fixedCostPerMonth,
+      fixedCost,
       eventCostDelta: 0,
       interestCost: ic,
-      profit: -dc.fixedCostPerMonth - ic + dc.restIncome,
+      profit: -fixedCost - ic + dc.restIncome,
       yieldMultiplier: 1.0,
       events: state.scheduledEvents,
+      cardBonusDelta: 0,
+      effectiveWeather,
     };
   }
 
@@ -392,7 +568,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   const method = FISHING_METHODS.find(m => m.id === selectedMethodId)!;
 
   if (!area || !method) {
-    return emptyResult(currentWeather, calcInterest(state), state.difficulty);
+    return emptyResult(effectiveWeather, calcInterest(state), state.difficulty);
   }
 
   // 対象魚種を絞る（海域×漁法の交差）
@@ -401,13 +577,13 @@ function calculateMonthResult(state: GameState): MonthResult {
   );
 
   if (validFish.length === 0) {
-    return emptyResult(currentWeather, calcInterest(state), state.difficulty);
+    return emptyResult(effectiveWeather, calcInterest(state), state.difficulty);
   }
 
-  // 天候補正
-  const weatherMultiplier = getWeatherMultiplier(currentWeather, method.id);
+  // 天候補正（実効天候を使用）
+  const weatherMultiplier = getWeatherMultiplier(effectiveWeather, method.id);
 
-  // イベントによる水揚げ補正（解決済みイベントを合算）
+  // イベントによる水揚げ補正
   let eventYieldMultiplier = 1.0;
   let eventCostDelta = 0;
   for (const ev of state.scheduledEvents) {
@@ -436,11 +612,23 @@ function calculateMonthResult(state: GameState): MonthResult {
   const priceVarianceReduction = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.priceVarianceReduction || 0), 0);
   const upgradeYieldBonus = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.yieldBonus || 0), 0);
 
+  // 増員投入ボーナス
+  const extraCrewBonus = state.extraCrewDeployed ? 1.2 : 1.0;
+
+  // 絆ボーナス（連続使用で最大+10%水揚げ）
+  const bondLevel = state.bondLevels[state.selectedFishermanId ?? ''] ?? 0;
+  const bondYieldBonus = 1 + bondLevel * 0.02; // 絆1→+2%, 絆5→+10%
+
+  // カードの漁法・海域ボーナス
+  const cardMethodMult = cardFx.methodMults[method.id] ?? 1;
+  const cardAreaMult = cardFx.areaMults[area.id] ?? 1;
+
   // 水揚げ量計算
   const baseVariance = Math.max(0.05, method.yieldVariance - fisherStabilityBonus * 0.2);
   const yieldNoise = 1 + (Math.random() * 2 - 1) * baseVariance;
-  const totalYieldMultiplier = dc.baseYieldMultiplier * weatherMultiplier * eventYieldMultiplier * learningYieldBonus
-    * fisherYieldBonus * specialBonus * (1 + upgradeYieldBonus) * yieldNoise;
+  const totalYieldMultiplier = dc.baseYieldMultiplier * weatherMultiplier * eventYieldMultiplier
+    * learningYieldBonus * fisherYieldBonus * specialBonus * (1 + upgradeYieldBonus)
+    * cardFx.allYieldMult * cardMethodMult * cardAreaMult * extraCrewBonus * bondYieldBonus * yieldNoise;
   const baseYield = method.baseYield * totalYieldMultiplier;
 
   // 魚種ごとの分配
@@ -461,31 +649,52 @@ function calculateMonthResult(state: GameState): MonthResult {
     if (weights[i] <= 0) continue;
 
     const share = weights[i] / totalWeight;
-    const quantity = Math.round(baseYield * share);
+    // 旬魚ボーナス（seasonalFishMultiplier）
+    const isInSeason = fish.seasonality[state.month - 1] >= 1.2;
+    const seasonalCardMult = isInSeason ? cardFx.seasonalMult : 1;
+    const quantity = Math.round(baseYield * share * seasonalCardMult);
     if (quantity <= 0) continue;
 
     const seasonalPrice = fish.basePrice * fish.seasonality[state.month - 1];
     const priceNoise = 1 + (Math.random() * 2 - 1) * priceVariance;
-    const unitPrice = Math.round(seasonalPrice * priceNoise);
+    // カードの価格補正（全体・レア・魚種別）
+    const rarityMult = fish.rarity === 'rare' ? cardFx.rarePriceMult : 1;
+    const fishPriceMult = cardFx.fishPriceMults[fish.id] ?? 1;
+    const unitPrice = Math.round(seasonalPrice * priceNoise * cardFx.allPriceMult * rarityMult * fishPriceMult);
     const subtotal = quantity * unitPrice;
 
     catches.push({ fishId: fish.id, fishName: fish.name, quantity, unitPrice, subtotal });
     totalRevenue += subtotal;
   }
 
-  // コスト計算
+  // コスト計算（年度補正・カード補正を適用）
   const fuelCost = Math.round(
     dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction)
+    * cardFx.fuelMult * state.yearFuelMultiplier
   );
-  const fixedCost = dc.fixedCostPerMonth;
+  const fixedCost = Math.round(dc.fixedCostPerMonth * cardFx.fixedCostMult * state.yearFixedMultiplier);
   const interestCost = calcInterest(state);
-  const profit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost;
+
+  // カードの固定ボーナス（相場暴落など）
+  const cardFixedBonus = cardFx.fixedBonus;
+
+  // 大博打カード（利益確定後に適用）
+  let gamblerBonus = 0;
+  if (cardFx.gamblerEffect) {
+    const baseProfit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost + cardFixedBonus;
+    const ge = cardFx.gamblerEffect;
+    if (baseProfit >= ge.profitThreshold) gamblerBonus = ge.bonus;
+    else if (baseProfit < 0) gamblerBonus = ge.penalty;
+  }
+
+  const cardBonusDelta = cardFixedBonus + gamblerBonus;
+  const profit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost + cardBonusDelta;
 
   return {
     isResting: false,
     area: area.name,
     method: method.name,
-    weather: currentWeather,
+    weather: effectiveWeather,
     catches,
     totalRevenue,
     fuelCost,
@@ -495,6 +704,9 @@ function calculateMonthResult(state: GameState): MonthResult {
     profit,
     yieldMultiplier: totalYieldMultiplier,
     events: state.scheduledEvents,
+    cardBonusDelta,
+    fatefulWasLucky: cardFx.fatefulWasLucky,
+    effectiveWeather,
   };
 }
 
@@ -512,6 +724,8 @@ function emptyResult(weather: Weather, interestCost: number, difficulty: Difficu
     profit: -fixedCost - interestCost,
     yieldMultiplier: 1.0,
     events: [],
+    cardBonusDelta: 0,
+    effectiveWeather: weather,
   };
 }
 
@@ -542,8 +756,8 @@ function deriveNewLearningBonuses(result: MonthResult, existing: LearningBonus[]
     if (!alreadyHas) {
       bonuses.push({
         key: 'storm-resilience',
-        description: '荒天を経験：次回荒天時の損失軽減',
-        effect: {},
+        description: '荒天を経験：次の3ヶ月、嵐時の水揚げが15%向上',
+        effect: { yieldMultiplier: 1.15 },
         remainingMonths: 3,
       });
     }
