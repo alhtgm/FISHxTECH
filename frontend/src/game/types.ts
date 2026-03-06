@@ -221,6 +221,7 @@ export interface MonthResult {
   totalRevenue: number;    // 総売上
   fuelCost: number;        // 燃料費
   fixedCost: number;       // 固定費
+  crewSalaryCost: number;  // クルー人件費
   eventCostDelta: number;  // イベントによる増減
   interestCost: number;    // 利息
   profit: number;          // 利益

@@ -17,6 +17,7 @@ import {
   isAreaRestricted, isMethodRestricted,
   enterCardSelect, toggleVoyageCard, confirmVoyageCards,
   hireCrew, hireApplicant, fireCrew, upgradeCrew, toggleCrewSelection, getCrewEventBonus,
+  calcCrewSalary,
 } from '../game/engine';
 import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, CREW_MEMBERS, GAME_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
@@ -81,7 +82,7 @@ function spawnCoins(count: number) {
 // ========================================
 function calcExpectedProfit(
   areaId: string, methodId: string, month: number, weather: string,
-  fuelReduction: number
+  fuelReduction: number, crewSalaryCost = 0
 ): { min: number; max: number; topFish: typeof FISH_SPECIES } {
   const area = FISHING_AREAS.find(a => a.id === areaId)!;
   const method = FISHING_METHODS.find(m => m.id === methodId)!;
@@ -108,8 +109,8 @@ function calcExpectedProfit(
     totalRevMax += qty * seasonal * (1 + priceVar) * (1 + method.yieldVariance * 0.5);
   });
 
-  const min = Math.round(totalRevMin - fuelCost - fixedCost);
-  const max = Math.round(totalRevMax - fuelCost - fixedCost);
+  const min = Math.round(totalRevMin - fuelCost - fixedCost - crewSalaryCost);
+  const max = Math.round(totalRevMax - fuelCost - fixedCost - crewSalaryCost);
 
   // 旬の魚TOP3
   const topFish = validFish
@@ -425,6 +426,7 @@ export class App {
         ${this.renderRightPanel()}
         ${this.renderLogPanel()}
       </div>
+      <div class="version-label">v1.0.0</div>
     </div>`;
   }
 
@@ -481,13 +483,12 @@ export class App {
           <span class="level-num">Lv.${level}</span>
           <span class="level-label">会社レベル</span>
         </div>
-        <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:4px">
-          累積利益 ¥${totalProfit.toLocaleString()} / ¥${(GAME_CONFIG.LEVEL_THRESHOLDS[level] || 99999999).toLocaleString()}
-        </div>
         <div class="reputation-bar" title="評判 ${reputation}/100">
           <div class="reputation-bar-fill" style="width:${reputation}%"></div>
         </div>
-        <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:8px">⭐ 評判 ${reputation}/100</div>
+        <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:8px">
+          ⭐ 評判 ${reputation}/100　次Lv: ${[0,30,55,75,90][level] ?? '―'}
+        </div>
         <div class="stat-row">
           <span class="stat-label">💰 資金</span>
           <span class="stat-value money">¥${money.toLocaleString()}</span>
@@ -706,8 +707,24 @@ export class App {
   private refreshCenterPanel() {
     const cp = document.getElementById('center-panel');
     if (cp) {
+      // スクロール可能な内部ビューのスクロール位置を保存
+      const scrollableSelectors = ['.growth-view', '.decision-view', '.result-view', '.news-view', '.panel-body'];
+      let savedScroll = 0;
+      let savedSelector = '';
+      for (const sel of scrollableSelectors) {
+        const el = cp.querySelector(sel) as HTMLElement | null;
+        if (el && el.scrollTop > 0) {
+          savedScroll = el.scrollTop;
+          savedSelector = sel;
+          break;
+        }
+      }
       cp.innerHTML = this.renderCenterPanel();
       this.bindCenterPanel();
+      if (savedScroll > 0 && savedSelector) {
+        const restored = cp.querySelector(savedSelector) as HTMLElement | null;
+        if (restored) restored.scrollTop = savedScroll;
+      }
     }
   }
 
@@ -809,7 +826,8 @@ export class App {
     let previewHtml = '';
     if (!isResting && area && method) {
       const weatherForCalc = hasForecast ? currentWeather : 'cloudy'; // 予報なしは中間値
-      const preview = calcExpectedProfit(area.id, method.id, month, weatherForCalc, fuelReduction);
+      const crewSalaryCost = this.state.crew.reduce((sum, c) => sum + calcCrewSalary(c), 0);
+      const preview = calcExpectedProfit(area.id, method.id, month, weatherForCalc, fuelReduction, crewSalaryCost);
       const isStormy = currentWeather === 'stormy';
       let fishChips = '';
       if (hasInfo1) {
@@ -920,7 +938,7 @@ export class App {
         <div class="decision-section" style="background:rgba(244,162,97,0.05);border-color:rgba(244,162,97,0.3)">
           <div style="font-size:0.8rem;color:var(--accent-gold)">
             🏠 休業を選択<br>
-            <span style="color:var(--text-muted);font-size:0.72rem">副業収入 ¥${dc.restIncome.toLocaleString()} / 固定費 ¥${dc.fixedCostPerMonth.toLocaleString()}</span>
+            <span style="color:var(--text-muted);font-size:0.72rem">副業収入 ¥${dc.restIncome.toLocaleString()} / 固定費 ¥${dc.fixedCostPerMonth.toLocaleString()} / 人件費 ¥${this.state.crew.reduce((sum, c) => sum + calcCrewSalary(c), 0).toLocaleString()}</span>
           </div>
         </div>`}
         <div class="decision-section">
@@ -1045,6 +1063,10 @@ export class App {
             <div class="breakdown-label">固定費</div>
             <div class="breakdown-value text-red">-¥${r.fixedCost.toLocaleString()}</div>
           </div>
+          ${r.crewSalaryCost > 0 ? `<div class="breakdown-item">
+            <div class="breakdown-label">👥 人件費</div>
+            <div class="breakdown-value text-red">-¥${r.crewSalaryCost.toLocaleString()}</div>
+          </div>` : ''}
           ${r.interestCost > 0 ? `<div class="breakdown-item">
             <div class="breakdown-label">利息</div>
             <div class="breakdown-value text-red">-¥${r.interestCost.toLocaleString()}</div>
@@ -1055,6 +1077,27 @@ export class App {
               ${r.eventCostDelta >= 0 ? '+' : ''}¥${r.eventCostDelta.toLocaleString()}
             </div>
           </div>` : ''}
+          ${r.cardBonusDelta !== 0 ? `<div class="breakdown-item">
+            <div class="breakdown-label">航海カード</div>
+            <div class="breakdown-value ${r.cardBonusDelta >= 0 ? 'text-green' : 'text-red'}">
+              ${r.cardBonusDelta >= 0 ? '+' : ''}¥${r.cardBonusDelta.toLocaleString()}
+            </div>
+          </div>` : ''}
+        </div>
+        <div class="profit-formula">
+          ${[
+            `売上 ¥${r.totalRevenue.toLocaleString()}`,
+            `燃料 -¥${r.fuelCost.toLocaleString()}`,
+            `固定 -¥${r.fixedCost.toLocaleString()}`,
+            r.crewSalaryCost > 0 ? `人件費 -¥${r.crewSalaryCost.toLocaleString()}` : '',
+            r.interestCost > 0 ? `利息 -¥${r.interestCost.toLocaleString()}` : '',
+            r.eventCostDelta !== 0 ? `イベント ${r.eventCostDelta >= 0 ? '+' : ''}¥${r.eventCostDelta.toLocaleString()}` : '',
+            r.cardBonusDelta !== 0 ? `カード ${r.cardBonusDelta >= 0 ? '+' : ''}¥${r.cardBonusDelta.toLocaleString()}` : '',
+          ].filter(Boolean).join(' <span class="formula-sep">→</span> ')}
+          <span class="formula-sep">=</span>
+          <span class="${r.profit >= 0 ? 'text-green' : 'text-red'}" style="font-weight:700">
+            ${r.profit >= 0 ? '+' : ''}¥${r.profit.toLocaleString()}
+          </span>
         </div>
         ${eventLogs ? `<div class="mb-8">${eventLogs}</div>` : ''}
         `}
@@ -1553,31 +1596,8 @@ export class App {
     if (!event) return '';
 
     const isQuick = event.template.isQuick ?? false;
+    const dayLabel = isQuick ? `⚡ ${event.day}日目 — 判断タイム！` : `📅 ${event.day}日目のイベント`;
 
-    if (isQuick) {
-      // クイック決断：即時効果・ルーレットなし
-      const optionsHtml = event.template.options.map((opt, i) => {
-        const effDesc = this.describeEffect(opt.effect);
-        return `
-        <button class="quick-option-btn" data-option="${i}">
-          <div class="quick-option-label">${opt.label}</div>
-          <div class="quick-option-effect">${effDesc}</div>
-        </button>`;
-      }).join('');
-
-      return `
-      <div class="modal-overlay quick-overlay">
-        <div class="quick-decision-modal">
-          <div class="quick-decision-day">⚡ ${event.day}日目 — 判断タイム！</div>
-          <div class="quick-decision-title">${event.template.title}</div>
-          <div class="quick-decision-body">${event.template.description}</div>
-          <div class="quick-decision-options">${optionsHtml}</div>
-          <div class="quick-decision-hint">※ どちらを選んでも漁は継続します</div>
-        </div>
-      </div>`;
-    }
-
-    // 通常イベント：ルーレットあり
     const optionsHtml = event.template.options.map((opt, i) => `
       <button class="event-option-btn" data-option="${i}">
         <div class="event-option-label">
@@ -1590,7 +1610,7 @@ export class App {
     return `
     <div class="modal-overlay">
       <div class="event-modal">
-        <div class="event-modal-day">📅 ${event.day}日目のイベント</div>
+        <div class="event-modal-day">${dayLabel}</div>
         <div class="event-modal-title">${event.template.title}</div>
         <div class="event-modal-body">${event.template.description}</div>
         <div class="event-options">${optionsHtml}</div>
@@ -1603,28 +1623,15 @@ export class App {
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return;
 
-    const isQuick = event.template.isQuick ?? false;
-
-    if (isQuick) {
-      // クイック決断：即時適用（ルーレットなし）
-      document.querySelectorAll('.quick-option-btn').forEach((btn, i) => {
-        btn.addEventListener('click', () => {
-          const option = event.template.options[i];
-          audioManager.playSE('select');
-          this.setState(s => resolveEvent(s, option, true));
+    // 全イベントルーレット方式
+    document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
+      btn.addEventListener('click', () => {
+        const option = event.template.options[i];
+        this.showRoulette(option, (success) => {
+          this.setState(s => resolveEvent(s, option, success));
         });
       });
-    } else {
-      // 通常イベント：ルーレット
-      document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
-        btn.addEventListener('click', () => {
-          const option = event.template.options[i];
-          this.showRoulette(option, (success) => {
-            this.setState(s => resolveEvent(s, option, success));
-          });
-        });
-      });
-    }
+    });
   }
 
   // ========================================

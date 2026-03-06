@@ -467,10 +467,18 @@ export function resolveEvent(state: GameState, option: EventOption, success: boo
 // ----------------------------------------
 // 月終了：結果計算
 // ----------------------------------------
+// ----------------------------------------
+// クルー人件費計算
+// ----------------------------------------
+export function calcCrewSalary(c: import('./types').CrewMember): number {
+  const base = Math.max(220_000, Math.round(c.hireCost * 0.4));
+  return base + c.upgradeLevel * 60_000;
+}
+
 export function finishMonth(state: GameState): GameState {
   const result = calculateMonthResult(state);
 
-  let money = state.money - result.fuelCost - result.fixedCost + result.totalRevenue + result.eventCostDelta - result.interestCost;
+  let money = state.money - result.fuelCost - result.fixedCost - result.crewSalaryCost + result.totalRevenue + result.eventCostDelta - result.interestCost;
   let debt = state.debt;
   let debtTurnsLeft = state.debtTurnsLeft;
 
@@ -486,7 +494,10 @@ export function finishMonth(state: GameState): GameState {
 
   const totalProfit = state.totalProfit + result.profit;
   const totalRevenue = state.totalRevenue + result.totalRevenue;
-  const newLevel = calcLevel(totalProfit);
+  // 利益に応じた評判の微量自動変動（月次）
+  const profitRepDelta = result.profit > 500_000 ? 2 : result.profit > 0 ? 1 : result.profit < -500_000 ? -3 : result.profit < 0 ? -1 : 0;
+  const baseNewRep = Math.min(100, Math.max(0, state.reputation + profitRepDelta));
+  const newLevel = calcLevel(baseNewRep);
 
   // 借金ターン進行
   if (debt > 0) {
@@ -537,11 +548,11 @@ export function finishMonth(state: GameState): GameState {
     money,
     debt,
     debtTurnsLeft,
-    reputation: Math.min(100, state.reputation + challengeRepBonus),
+    reputation: Math.min(100, baseNewRep + challengeRepBonus),
     monthResult: result,
     totalProfit,
     totalRevenue,
-    level: newLevel,
+    level: calcLevel(Math.min(100, baseNewRep + challengeRepBonus)),
     monthHistory: [...state.monthHistory, result],
     learningBonuses,
     currentChallenge,
@@ -550,11 +561,12 @@ export function finishMonth(state: GameState): GameState {
   };
 }
 
-function calcLevel(totalProfit: number): number {
-  const thresholds = GAME_CONFIG.LEVEL_THRESHOLDS;
+// 評判→レベル（Lv1:0+ / Lv2:30+ / Lv3:55+ / Lv4:75+ / Lv5:90+）
+function calcLevel(reputation: number): number {
+  const thresholds = [0, 30, 55, 75, 90];
   let level = 1;
   for (let i = thresholds.length - 1; i >= 0; i--) {
-    if (totalProfit >= thresholds[i]) {
+    if (reputation >= thresholds[i]) {
       level = i + 1;
       break;
     }
@@ -570,6 +582,8 @@ function calculateMonthResult(state: GameState): MonthResult {
   const cardFx = getCardFx(state.currentVoyageCards, currentWeather);
   const effectiveWeather = cardFx.effectiveWeather;
 
+  const crewSalaryCost = state.crew.reduce((sum, c) => sum + calcCrewSalary(c), 0);
+
   if (isResting) {
     const ic = calcInterest(state);
     const fixedCost = Math.round(dc.fixedCostPerMonth * state.yearFixedMultiplier);
@@ -580,9 +594,10 @@ function calculateMonthResult(state: GameState): MonthResult {
       totalRevenue: 0,
       fuelCost: 0,
       fixedCost,
+      crewSalaryCost,
       eventCostDelta: 0,
       interestCost: ic,
-      profit: -fixedCost - ic + dc.restIncome,
+      profit: -fixedCost - crewSalaryCost - ic + dc.restIncome,
       yieldMultiplier: 1.0,
       events: state.scheduledEvents,
       cardBonusDelta: 0,
@@ -594,7 +609,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   const method = FISHING_METHODS.find(m => m.id === selectedMethodId)!;
 
   if (!area || !method) {
-    return emptyResult(effectiveWeather, calcInterest(state));
+    return emptyResult(effectiveWeather, calcInterest(state), crewSalaryCost);
   }
 
   // 対象魚種を絞る（海域×漁法の交差）
@@ -603,7 +618,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   );
 
   if (validFish.length === 0) {
-    return emptyResult(effectiveWeather, calcInterest(state));
+    return emptyResult(effectiveWeather, calcInterest(state), crewSalaryCost);
   }
 
   // 天候補正（実効天候を使用）
@@ -729,14 +744,14 @@ function calculateMonthResult(state: GameState): MonthResult {
   // 大博打カード（利益確定後に適用）
   let gamblerBonus = 0;
   if (cardFx.gamblerEffect) {
-    const baseProfit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost + cardFixedBonus;
+    const baseProfit = totalRevenue - fuelCost - fixedCost - crewSalaryCost + eventCostDelta - interestCost + cardFixedBonus;
     const ge = cardFx.gamblerEffect;
     if (baseProfit >= ge.profitThreshold) gamblerBonus = ge.bonus;
     else if (baseProfit < 0) gamblerBonus = ge.penalty;
   }
 
   const cardBonusDelta = cardFixedBonus + gamblerBonus;
-  const profit = totalRevenue - fuelCost - fixedCost + eventCostDelta - interestCost + cardBonusDelta;
+  const profit = totalRevenue - fuelCost - fixedCost - crewSalaryCost + eventCostDelta - interestCost + cardBonusDelta;
 
   return {
     isResting: false,
@@ -747,6 +762,7 @@ function calculateMonthResult(state: GameState): MonthResult {
     totalRevenue,
     fuelCost,
     fixedCost,
+    crewSalaryCost,
     eventCostDelta,
     interestCost,
     profit,
@@ -758,7 +774,7 @@ function calculateMonthResult(state: GameState): MonthResult {
   };
 }
 
-function emptyResult(weather: Weather, interestCost: number): MonthResult {
+function emptyResult(weather: Weather, interestCost: number, crewSalaryCost = 0): MonthResult {
   const fixedCost = getConfig().fixedCostPerMonth;
   return {
     isResting: false,
@@ -767,9 +783,10 @@ function emptyResult(weather: Weather, interestCost: number): MonthResult {
     totalRevenue: 0,
     fuelCost: 0,
     fixedCost,
+    crewSalaryCost,
     eventCostDelta: 0,
     interestCost,
-    profit: -fixedCost - interestCost,
+    profit: -fixedCost - crewSalaryCost - interestCost,
     yieldMultiplier: 1.0,
     events: [],
     cardBonusDelta: 0,

@@ -1978,6 +1978,31 @@ html, body {
   font-size: 0.62rem !important;
   padding: 2px 6px !important;
 }
+.profit-formula {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  line-height: 1.8;
+  word-break: break-all;
+}
+.formula-sep {
+  color: var(--accent-secondary);
+  margin: 0 3px;
+  font-size: 0.6rem;
+}
+.version-label {
+  position: fixed;
+  bottom: 6px;
+  right: 10px;
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.2);
+  pointer-events: none;
+  z-index: 10;
+}
 
 /* ========================================
    スキルツリー（旧グリッド互換）
