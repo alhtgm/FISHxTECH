@@ -35,7 +35,8 @@ export function createInitialState(): GameState {
     unlockedAreas: ['kaga', 'nanao-bay'],
     unlockedMethods: ['fixed-net', 'bottom-trawl', 'gill-net'],
     upgrades: UPGRADES.map(u => ({ ...u, purchased: false })),
-    crew: CREW_MEMBERS.map(c => ({ ...c })),
+    crew: [{ ...CREW_MEMBERS[0] }],  // 高橋正一のみ初期雇用済み
+    applicants: [],
     selectedCrewIds: [CREW_MEMBERS[0].id],  // 高橋正一（初期採用済み）を初期選択
     selectedAreaId: null,
     selectedMethodId: null,
@@ -171,7 +172,8 @@ export function startNewYear(state: GameState): GameState {
     companyName: state.companyName,
     money: dc.initialMoney * 0.3 + carryover,
     upgrades: state.upgrades,
-    crew: state.crew,   // クルーは引き継ぐ（雇用・強化済みのまま）
+    crew: state.crew,
+    applicants: [],
     selectedCrewIds: state.selectedCrewIds,
     unlockedAreas: ['kaga', 'nanao-bay'],
     unlockedMethods: ['fixed-net', 'bottom-trawl', 'gill-net'],
@@ -278,6 +280,8 @@ export function startMonth(state: GameState): GameState {
   const challenge = generateChallenge(state.level, weather);
   // 5枚ドロー→CARD_SELECTフェーズでプレイヤーが3枚を選ぶ
   const voyageCardDeck = drawVoyageCardDeck(5);
+  // 毎月2〜3名の新規応募者を生成
+  const applicants = generateApplicants(state.crew, state.level);
 
   return {
     ...state,
@@ -287,6 +291,7 @@ export function startMonth(state: GameState): GameState {
     currentNews: news,
     currentChallenge: challenge,
     voyageCardDeck,
+    applicants,
     currentVoyageCards: [], // CARD_SELECTで選択するまで空
     selectedAreaId: null,
     selectedMethodId: null,
@@ -299,6 +304,19 @@ export function startMonth(state: GameState): GameState {
     extraCrewDeployed: false,
     monthlyServices: { forecast: false, insurance: false },
   };
+}
+
+// ----------------------------------------
+// 応募者生成（毎月呼ばれる）
+// ----------------------------------------
+function generateApplicants(existingCrew: import('./types').CrewMember[], level: number): import('./types').CrewMember[] {
+  const existingIds = new Set(existingCrew.map(c => c.id));
+  const pool = CREW_MEMBERS.filter(c =>
+    !existingIds.has(c.id) &&
+    (!c.unlockLevel || c.unlockLevel <= level)
+  );
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(3, shuffled.length));
 }
 
 function rollWeather(): Weather {
@@ -338,9 +356,9 @@ export function prepareOperation(state: GameState): GameState {
   const regularTemplates = EVENT_TEMPLATES.filter(e => !e.isQuick);
   const regularPick = pickRandomFromPool(regularTemplates, 1);
 
-  // クイック決断: 2件（常に発生して操業中の動きを作る）
+  // クイック決断: 4件（操業中の動きを増やす）
   const quickTemplates = EVENT_TEMPLATES.filter(e => e.isQuick === true);
-  const quickPick = pickRandomFromPool(quickTemplates, 2);
+  const quickPick = pickRandomFromPool(quickTemplates, 4);
 
   const allTemplates = [...regularPick, ...quickPick];
   const days = pickUniqueDays(allTemplates.length, 5, 26);
@@ -924,18 +942,38 @@ export function isMethodRestricted(state: GameState, methodId: string): boolean 
 }
 
 // ----------------------------------------
-// 船員雇用
+// 応募者から雇用
 // ----------------------------------------
-export function hireCrew(state: GameState, crewId: string): GameState {
-  const member = state.crew.find(c => c.id === crewId);
-  if (!member || member.hired || state.money < member.hireCost) return state;
-  if (member.unlockLevel && member.unlockLevel > state.level) return state;
+export function hireApplicant(state: GameState, crewId: string): GameState {
+  const applicant = state.applicants.find(c => c.id === crewId);
+  if (!applicant || state.money < applicant.hireCost) return state;
+  if (applicant.unlockLevel && applicant.unlockLevel > state.level) return state;
 
   return {
     ...state,
-    money: state.money - member.hireCost,
-    crew: state.crew.map(c => c.id === crewId ? { ...c, hired: true } : c),
+    money: state.money - applicant.hireCost,
+    crew: [...state.crew, { ...applicant, hired: true }],
+    applicants: state.applicants.filter(c => c.id !== crewId),
   };
+}
+
+// ----------------------------------------
+// クルー解雇（初期クルーは解雇不可）
+// ----------------------------------------
+export function fireCrew(state: GameState, crewId: string): GameState {
+  if (crewId === 'veteran') return state;  // 高橋正一は解雇不可
+  return {
+    ...state,
+    crew: state.crew.filter(c => c.id !== crewId),
+    selectedCrewIds: state.selectedCrewIds.filter(id => id !== crewId),
+  };
+}
+
+// ----------------------------------------
+// 船員雇用（後方互換性のため残す）
+// ----------------------------------------
+export function hireCrew(state: GameState, crewId: string): GameState {
+  return hireApplicant(state, crewId);
 }
 
 // ----------------------------------------

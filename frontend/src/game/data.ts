@@ -104,7 +104,7 @@ export const FISHING_METHODS: FishingMethod[] = [
     name: 'まき網',
     description: '魚の群れを大きな網で囲い込む漁法。大量漁獲が可能だが、外れると収穫ゼロに近い。',
     fuelMultiplier: 2.5,
-    baseYield: 30000,
+    baseYield: 8000,
     yieldVariance: 0.60,
     targetFish: ['ma-iwashi', 'ma-saba', 'ma-aji', 'buri', 'fukuragi', 'katsuo'],
     unlockLevel: 2,
@@ -332,9 +332,10 @@ export const FISH_SPECIES: FishSpecies[] = [
 ];
 
 // ----------------------------------------
-// NPC漁師（5名）
+// クルー応募者プール（毎月ランダムに2〜3名が応募）
 // ----------------------------------------
 export const CREW_MEMBERS: CrewMember[] = [
+  // ── 初期クルー（高橋正一のみ最初から雇用済み） ──
   {
     id: 'veteran',
     name: '高橋 正一（65歳）',
@@ -349,6 +350,7 @@ export const CREW_MEMBERS: CrewMember[] = [
     baseEventBonus: 0.10,
     yieldBonusPerLevel: 0.02,
   },
+  // ── 応募者プール（20名） ──
   {
     id: 'young',
     name: '中島 海斗（24歳）',
@@ -422,6 +424,228 @@ export const CREW_MEMBERS: CrewMember[] = [
     yieldBonusPerLevel: 0.05,
     specialMethod: 'diving',
     unlockLevel: 4,
+  },
+  {
+    id: 'purse-pro',
+    name: '新堂 龍司（33歳）',
+    description: 'まき網専門の若手漁師。魚群の動きを読む直感が鋭く、大漁を呼び込む男。',
+    icon: '🎣',
+    hireCost: 380_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [300_000, 450_000, 620_000],
+    baseYieldBonus: 0.08,
+    baseStabilityBonus: -0.05,
+    baseEventBonus: 0.05,
+    yieldBonusPerLevel: 0.04,
+    specialMethod: 'purse-seine',
+  },
+  {
+    id: 'steady',
+    name: '木村 春雄（58歳）',
+    description: '穏やかで確実な漁師。水揚げのムラが少なく、毎月安定した結果を出す。',
+    icon: '🧓',
+    hireCost: 350_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [270_000, 400_000, 560_000],
+    baseYieldBonus: 0.03,
+    baseStabilityBonus: 0.4,
+    baseEventBonus: 0.08,
+    yieldBonusPerLevel: 0.02,
+  },
+  {
+    id: 'gill-ace',
+    name: '前田 彩（28歳）',
+    description: '刺網漁の若手エース。網の設置位置の選定が巧みで、高品質な魚が獲れる。',
+    icon: '🌊',
+    hireCost: 250_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [220_000, 360_000, 520_000],
+    baseYieldBonus: 0.06,
+    baseStabilityBonus: 0.1,
+    baseEventBonus: 0.0,
+    yieldBonusPerLevel: 0.04,
+    specialMethod: 'gill-net',
+  },
+  {
+    id: 'line-pro',
+    name: '宮下 啓二（47歳）',
+    description: '一本釣りの達人。のどぐろやマダイなど高級魚を専門に狙う技術を持つ。',
+    icon: '🎏',
+    hireCost: 420_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [310_000, 460_000, 630_000],
+    baseYieldBonus: 0.04,
+    baseStabilityBonus: 0.15,
+    baseEventBonus: 0.08,
+    yieldBonusPerLevel: 0.03,
+    specialMethod: 'line-fishing',
+  },
+  {
+    id: 'old-master',
+    name: '山下 大悟（62歳）',
+    description: '40年以上のキャリアを持つ超ベテラン。どんな状況でも動じない精神的支柱。',
+    icon: '⚓',
+    hireCost: 480_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [350_000, 500_000, 680_000],
+    baseYieldBonus: 0.04,
+    baseStabilityBonus: 0.5,
+    baseEventBonus: 0.12,
+    yieldBonusPerLevel: 0.02,
+    unlockLevel: 2,
+  },
+  {
+    id: 'negotiator',
+    name: '野口 沙織（36歳）',
+    description: '元漁協職員。交渉力と人脈が武器でイベントを有利に解決する腕を持つ。',
+    icon: '📋',
+    hireCost: 400_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [300_000, 440_000, 600_000],
+    baseYieldBonus: -0.02,
+    baseStabilityBonus: 0.1,
+    baseEventBonus: 0.20,
+    yieldBonusPerLevel: 0.02,
+    unlockLevel: 2,
+  },
+  {
+    id: 'daredevil',
+    name: '橋本 鉄也（44歳）',
+    description: '大胆な判断で知られる漁師。水揚げは多いがリスクも高め。当たればでかい。',
+    icon: '⚡',
+    hireCost: 370_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [280_000, 420_000, 580_000],
+    baseYieldBonus: 0.18,
+    baseStabilityBonus: -0.25,
+    baseEventBonus: -0.08,
+    yieldBonusPerLevel: 0.06,
+  },
+  {
+    id: 'market-queen',
+    name: '津田 光子（55歳）',
+    description: '市場の番頭として長年働いた経験者。売れるタイミングを見極めるプロ。',
+    icon: '🏪',
+    hireCost: 440_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [330_000, 480_000, 650_000],
+    baseYieldBonus: -0.03,
+    baseStabilityBonus: 0.25,
+    baseEventBonus: 0.18,
+    yieldBonusPerLevel: 0.02,
+    unlockLevel: 3,
+  },
+  {
+    id: 'net-expert',
+    name: '小林 武（39歳）',
+    description: '定置網の設置・回収を極めた職人。定置網漁の効率が格段に上がる。',
+    icon: '🕸️',
+    hireCost: 320_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [250_000, 390_000, 550_000],
+    baseYieldBonus: 0.07,
+    baseStabilityBonus: 0.2,
+    baseEventBonus: 0.03,
+    yieldBonusPerLevel: 0.03,
+    specialMethod: 'fixed-net',
+  },
+  {
+    id: 'rookie',
+    name: '石川 直人（22歳）',
+    description: '地元出身の新人漁師。経験は浅いが安い採用費と熱い向上心が魅力。',
+    icon: '🐟',
+    hireCost: 150_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [200_000, 350_000, 500_000],
+    baseYieldBonus: 0.02,
+    baseStabilityBonus: -0.05,
+    baseEventBonus: -0.02,
+    yieldBonusPerLevel: 0.06,
+  },
+  {
+    id: 'trawl-vet',
+    name: '永田 実（51歳）',
+    description: '加賀海域の底曳網漁で20年。甘エビやカレイの取り方を熟知している。',
+    icon: '🦐',
+    hireCost: 430_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [320_000, 470_000, 640_000],
+    baseYieldBonus: 0.06,
+    baseStabilityBonus: 0.2,
+    baseEventBonus: 0.05,
+    yieldBonusPerLevel: 0.03,
+    specialMethod: 'bottom-trawl',
+    unlockLevel: 2,
+  },
+  {
+    id: 'pr-master',
+    name: '遠藤 雅子（43歳）',
+    description: '漁業PR担当の経歴を持つ女性漁師。メディア対応が得意でトラブルを丸く収める。',
+    icon: '📺',
+    hireCost: 410_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [310_000, 460_000, 620_000],
+    baseYieldBonus: 0.0,
+    baseStabilityBonus: 0.15,
+    baseEventBonus: 0.22,
+    yieldBonusPerLevel: 0.02,
+    unlockLevel: 3,
+  },
+  {
+    id: 'safety-first',
+    name: '近藤 浩二（49歳）',
+    description: '安全管理のスペシャリスト。荒天・トラブル時の損失を最小限に抑える名人。',
+    icon: '🛡️',
+    hireCost: 390_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [290_000, 430_000, 590_000],
+    baseYieldBonus: -0.01,
+    baseStabilityBonus: 0.45,
+    baseEventBonus: 0.15,
+    yieldBonusPerLevel: 0.02,
+    unlockLevel: 2,
+  },
+  {
+    id: 'mid-allround',
+    name: '牧野 達夫（37歳）',
+    description: 'バランスの良い中堅漁師。特化型ではないが穴のない安定した働きが魅力。',
+    icon: '⛵',
+    hireCost: 280_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [240_000, 380_000, 540_000],
+    baseYieldBonus: 0.06,
+    baseStabilityBonus: 0.1,
+    baseEventBonus: 0.06,
+    yieldBonusPerLevel: 0.03,
+  },
+  {
+    id: 'noto-native',
+    name: '竹内 耕作（56歳）',
+    description: '能登生まれの能登育ち。能登の海を知り尽くした地元の重鎮的存在。',
+    icon: '🏔️',
+    hireCost: 460_000,
+    hired: false,
+    upgradeLevel: 0,
+    upgradeCosts: [340_000, 490_000, 660_000],
+    baseYieldBonus: 0.08,
+    baseStabilityBonus: 0.3,
+    baseEventBonus: 0.10,
+    yieldBonusPerLevel: 0.03,
+    unlockLevel: 3,
   },
 ];
 
@@ -687,17 +911,17 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     options: [
       {
         label: '特別売りに応じる',
-        description: '即座に高収益が得られる。',
+        description: '即座に高収益が確定するが、漁獲に集中できず量は落ちる。',
         risk: 'low',
-        effect: { moneyDelta: 420000 },
-        failureEffect: { moneyDelta: 80000 },
+        effect: { moneyDelta: 420000, yieldMultiplier: 0.85 },
+        failureEffect: { moneyDelta: 80000, yieldMultiplier: 0.75 },
       },
       {
-        label: '断って市場で売る',
-        description: '量で勝負する。',
-        risk: 'low',
-        effect: { yieldMultiplier: 1.15 },
-        failureEffect: { yieldMultiplier: 0.88 },
+        label: '断って全力で漁を続ける',
+        description: '量が増える可能性があるが、市場価格次第では損をすることも。',
+        risk: 'high',
+        effect: { yieldMultiplier: 1.45 },
+        failureEffect: { moneyDelta: -80000, yieldMultiplier: 0.7 },
       },
     ],
   },
@@ -1128,7 +1352,7 @@ export const NEWS_TEMPLATES: Array<{
   {
     month: 1, items: [
       { id: 'n1-1', title: '年明けの寒ブリ相場', body: '石川産ブリの卸値が高騰している。鮮度の高い状態での水揚げが価格を左右しそうだ。', category: 'market', hint: 'ブリの旬は今がピーク' },
-      { id: 'n1-2', title: '1月の海況', body: '日本海は冬型気圧配置が続き、荒天に注意が必要。外浦方面への出港は気象確認を怠りなく。', category: 'weather' },
+      { id: 'n1-2', title: '1月の海況', body: '日本海は冬型気圧配置が続き、荒天に注意が必要。能登外浦への出港は気象確認を怠りなく。', category: 'weather' },
       { id: 'n1-3', title: '香箱ガニ漁終了間近', body: '香箱ガニ（ズワイガニ雌）の漁期は1月末まで。残りわずかな時期にどう動くか注目される。', category: 'regulation' },
     ],
   },
@@ -1140,26 +1364,26 @@ export const NEWS_TEMPLATES: Array<{
   },
   {
     month: 3, items: [
-      { id: 'n3-1', title: 'ハタハタが能登沖で増加', body: '能登沖でハタハタの魚影が濃くなっている。底曳網との相性が良く、量を狙えそうだ。', category: 'area', hint: '底曳網×能登内浦や志賀が◎' },
+      { id: 'n3-1', title: 'ハタハタが能登内浦で増加', body: '能登内浦でハタハタの魚影が濃くなっている。底曳網との相性が良く、量を狙えそうだ。', category: 'area', hint: '底曳網×能登内浦や志賀海域が◎' },
       { id: 'n3-2', title: '春漁スタート', body: '春の漁期に入り、各地で漁獲量が回復傾向。アカガレイも好調で市場価格が安定している。', category: 'market' },
     ],
   },
   {
     month: 4, items: [
       { id: 'n4-1', title: 'アマエビ漁が本格化', body: '春から初夏にかけて甘エビの漁獲量が増加する。底曳網での操業が中心となる。', category: 'area', hint: '甘エビは底曳網でのみ漁獲可能' },
-      { id: 'n4-2', title: '4月の海況', body: '穏やかな日が増えてくる。外浦方面への出港も比較的安定してきた。', category: 'weather' },
+      { id: 'n4-2', title: '4月の海況', body: '穏やかな日が増えてくる。能登外浦への出港も比較的安定してきた。', category: 'weather' },
     ],
   },
   {
     month: 5, items: [
-      { id: 'n5-1', title: 'イカ釣りシーズン開幕', body: 'スルメイカが能登周辺に回遊し始めた。イカ釣り漁の最盛期は夏に向かって続く。', category: 'area', hint: 'イカ釣×能登が最盛期へ' },
+      { id: 'n5-1', title: 'イカ釣りシーズン開幕', body: 'スルメイカが能登内浦に回遊し始めた。イカ釣り漁の最盛期は夏に向かって続く。', category: 'area', hint: 'イカ釣×能登内浦が最盛期へ' },
       { id: 'n5-2', title: 'マアジ・マイワシが豊漁', body: '定置網・まき網で回遊魚の水揚げが増加。量を取るなら今がチャンス。', category: 'market' },
     ],
   },
   {
     month: 6, items: [
       { id: 'n6-1', title: '能登外浦の保護区情報', body: '6月から能登外浦の一部海域で保護区設定期間に入る。操業計画の見直しが必要な漁業者も。', category: 'regulation', hint: '6月は能登外浦が規制対象' },
-      { id: 'n6-2', title: '夏場のスルメイカが最盛期', body: '能登方面でスルメイカの漁獲が増加。夜間操業のイカ釣り船が活発に動いている。', category: 'market' },
+      { id: 'n6-2', title: '夏場のスルメイカが最盛期', body: '能登内浦でスルメイカの漁獲が増加。夜間操業のイカ釣り船が活発に動いている。', category: 'market' },
     ],
   },
   {
@@ -1183,7 +1407,7 @@ export const NEWS_TEMPLATES: Array<{
   {
     month: 10, items: [
       { id: 'n10-1', title: '秋のブリシーズンへ', body: 'ブリの回遊量が増加。まき網や定置網で大量水揚げのチャンスが近づいている。', category: 'market', hint: 'ブリは12月に向けて価格が上昇' },
-      { id: 'n10-2', title: 'マサバが好調', body: '秋サバは脂が乗っており、10月が旬の最盛期。七尾や志賀方面で水揚げ増。', category: 'area' },
+      { id: 'n10-2', title: 'マサバが好調', body: '秋サバは脂が乗っており、10月が旬の最盛期。七尾湾・志賀海域で水揚げ増。', category: 'area' },
     ],
   },
   {
@@ -1205,7 +1429,7 @@ export const NEWS_TEMPLATES: Array<{
 // ゲーム定数（激ムズ固定パラメータ）
 // ----------------------------------------
 export const GAME_CONFIG = {
-  RUNNING_DURATION: 30,            // 月内進行時間（秒）
+  RUNNING_DURATION: 20,            // 月内進行時間（秒）
   MAX_EVENTS_PER_MONTH: 3,         // 月最大イベント数
   LEVEL_THRESHOLDS: [0, 2000000, 5000000, 10000000, 20000000], // レベル別累積利益
   // --- 激ムズ固定パラメータ ---
@@ -1216,9 +1440,9 @@ export const GAME_CONFIG = {
   priceVariance: 0.50,             // 価格ブレ±50%（博打）
   maxDebt: 500_000,                // 借金上限50万
   debtRepayTurns: 1,               // 返済猶予1ターン
-  weatherSunny: 0.20,              // 晴れ確率20%
-  weatherCloudy: 0.30,             // 曇り確率30%（残り50%が嵐）
-  baseYieldMultiplier: 0.60,       // 水揚げ量-40%
+  weatherSunny: 0.45,              // 晴れ確率45%
+  weatherCloudy: 0.35,             // 曇り確率35%（残り20%が嵐）
+  baseYieldMultiplier: 0.35,       // 水揚げ量-65%
   scoreMultiplier: 5.0,            // スコア倍率
   restIncome: 0,                   // 休業しても収入ゼロ
 };
@@ -1248,13 +1472,13 @@ export const VOYAGE_CARDS: VoyageCard[] = [
   },
   {
     id: 'storm-front', title: '嵐の前触れ', type: 'weather', rarity: 'uncommon', icon: '🌩️',
-    description: '荒天確定。定置網の収量＋70%\nその他の漁法は収量－20%',
-    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'fixed-net': 1.7, 'bottom-trawl': 0.8, 'gill-net': 0.8, 'purse-seine': 0.8, 'squid-fishing': 0.8, 'line-fishing': 0.8, 'diving': 0.5 } },
+    description: '荒天確定。定置網の収量＋30%\nその他の漁法は収量－20%',
+    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'fixed-net': 1.3, 'bottom-trawl': 0.8, 'gill-net': 0.8, 'purse-seine': 0.8, 'squid-fishing': 0.8, 'line-fishing': 0.8, 'diving': 0.5 } },
   },
   {
     id: 'morning-mist', title: '霧の朝', type: 'weather', rarity: 'uncommon', icon: '🌫️',
-    description: 'くもり確定。イカ釣りの収量×2.5\nその他の漁法は収量－10%',
-    effect: { weatherOverride: 'cloudy', specificMethodMultipliers: { 'squid-fishing': 2.5, 'fixed-net': 0.9, 'bottom-trawl': 0.9, 'gill-net': 0.9, 'purse-seine': 0.9, 'line-fishing': 0.9 } },
+    description: 'くもり確定。イカ釣りの収量×1.8\nその他の漁法は収量－10%',
+    effect: { weatherOverride: 'cloudy', specificMethodMultipliers: { 'squid-fishing': 1.8, 'fixed-net': 0.9, 'bottom-trawl': 0.9, 'gill-net': 0.9, 'purse-seine': 0.9, 'line-fishing': 0.9 } },
   },
   {
     id: 'calm-voyage', title: '春の凪', type: 'weather', rarity: 'common', icon: '⛵',
@@ -1279,8 +1503,8 @@ export const VOYAGE_CARDS: VoyageCard[] = [
   },
   {
     id: 'bumper-haul', title: '豊漁祭り', type: 'market', rarity: 'uncommon', icon: '🎪',
-    description: '全収量×1.5\nただし全魚価格×0.65（供給過多）',
-    effect: { allYieldMultiplier: 1.5, allPriceMultiplier: 0.65 },
+    description: '全収量×1.25\nただし全魚価格×0.65（供給過多）',
+    effect: { allYieldMultiplier: 1.25, allPriceMultiplier: 0.65 },
   },
   {
     id: 'export-boom', title: '輸出需要急騰', type: 'market', rarity: 'rare', icon: '✈️',
@@ -1377,8 +1601,8 @@ export const VOYAGE_CARDS: VoyageCard[] = [
   },
   {
     id: 'winter-gale', title: '冬の大時化', type: 'weather', rarity: 'rare', icon: '❄️',
-    description: '荒天確定\n底曳網の収量×2.8・カニ類価格×2.0',
-    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'bottom-trawl': 2.8 }, specificFishPriceMultipliers: { 'kano-kani': 2.0, 'koubako-gani': 2.0 } },
+    description: '荒天確定\n底曳網の収量×1.8・カニ類価格×2.0',
+    effect: { weatherOverride: 'stormy', specificMethodMultipliers: { 'bottom-trawl': 1.8 }, specificFishPriceMultipliers: { 'kano-kani': 2.0, 'koubako-gani': 2.0 } },
   },
   {
     id: 'veteran-knowledge', title: 'ベテランの眼力', type: 'special', rarity: 'uncommon', icon: '👁️',

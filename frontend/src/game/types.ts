@@ -282,7 +282,8 @@ export interface GameState {
   unlockedAreas: string[];
   unlockedMethods: string[];
   upgrades: Upgrade[];
-  crew: CrewMember[];
+  crew: CrewMember[];          // 雇用済みクルー
+  applicants: CrewMember[];    // 今月の応募者（毎月更新）
   selectedCrewIds: string[];   // 最大3人まで選択可能
 
   // 今月の選択

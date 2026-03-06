@@ -16,7 +16,7 @@ import {
   checkGrowth, proceedToNextMonth, purchaseUpgrade, calculateScore,
   isAreaRestricted, isMethodRestricted,
   enterCardSelect, toggleVoyageCard, confirmVoyageCards,
-  hireCrew, upgradeCrew, toggleCrewSelection, getCrewEventBonus,
+  hireCrew, hireApplicant, fireCrew, upgradeCrew, toggleCrewSelection, getCrewEventBonus,
 } from '../game/engine';
 import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, CREW_MEMBERS, GAME_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
@@ -237,7 +237,7 @@ export class App {
         <div class="setup-game-title">
           <h1>🎣 石川漁業シミュレーション</h1>
           <p class="title-sub">石川の豊かな海で、あなただけの漁業会社を育てよう。<br>12か月の判断と挑戦が始まる。</p>
-          <div class="setup-difficulty-badge">☠️ 激ムズモード固定　初期資金150万・嵐確率50%・月利15%</div>
+          <div class="setup-difficulty-badge">🎮 石川漁業シミュレーション　初期資金150万・月利15%</div>
         </div>
         <div class="setup-form">
           <div>
@@ -449,7 +449,6 @@ export class App {
     <div id="header">
       <span class="company-name">🏢 ${companyName}</span>
       <span class="month-display">${month}月</span>
-      <span class="difficulty-badge extreme">☠️激ムズ</span>
       <span class="status-message">${phaseMsg}</span>
       <span class="weather-display">${weatherIcon}</span>
       <span style="font-size:0.85rem;color:var(--accent-gold);font-weight:700">¥${money.toLocaleString()}</span>
@@ -604,8 +603,11 @@ export class App {
       ? `<span style="font-size:0.7rem;color:var(--text-muted)">（${selectedCrewIds.length}/3 人選択中）</span>` : '';
     return `
     <div id="right-panel" class="panel">
-      <div class="panel-header">意思決定リソース${isGrowth ? ' 🔓' : ''}</div>
+      <div class="panel-header">
+        ${isGrowth ? '成長リソース 🔓' : isDecision ? '⬇️ ここで海域・漁法を選択' : '情報パネル'}
+      </div>
       <div class="${panelBodyClass}">
+        ${isDecision ? '<div class="right-panel-hint">👇 下から選んでください</div>' : ''}
         <div class="section-title">🌊 海域</div>${areasHtml}
         <div class="section-title">⚙️ 漁法</div>${methodsHtml}
         <div class="section-title">👨‍✈️ クルー ${crewCountLabel}</div>${crewHtml || '<div style="color:var(--text-muted);font-size:0.75rem;padding:4px">採用済みのクルーなし</div>'}
@@ -890,12 +892,12 @@ export class App {
           <div class="decision-section-title">選択内容</div>
           <div style="font-size:0.8rem;line-height:1.8">
             <span style="color:var(--text-muted)">海域：</span>
-            <span style="color:${area ? 'var(--accent-primary)' : 'var(--text-muted)'}">
-              ${area ? area.icon + ' ' + area.name : '← 右パネルで選択'}
+            <span style="color:${area ? 'var(--accent-primary)' : 'var(--accent-gold)'}">
+              ${area ? area.icon + ' ' + area.name : '👉 右パネルで選択してください'}
             </span><br>
             <span style="color:var(--text-muted)">漁法：</span>
-            <span style="color:${method ? 'var(--accent-primary)' : 'var(--text-muted)'}">
-              ${method ? method.icon + ' ' + method.name : '← 右パネルで選択'}
+            <span style="color:${method ? 'var(--accent-primary)' : 'var(--accent-gold)'}">
+              ${method ? method.icon + ' ' + method.name : '👉 右パネルで選択してください'}
             </span>
           </div>
           ${area && method ? `<div class="cost-preview">
@@ -1146,7 +1148,7 @@ export class App {
       ? unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level)
       : [];
 
-    // スキルツリーUI（カテゴリ別）
+    // スキルツリーUI（横一列ノード形式）
     const categories: Array<{ key: string; label: string; icon: string }> = [
       { key: 'info', label: '情報', icon: '🔭' },
       { key: 'efficiency', label: '効率化', icon: '⚙️' },
@@ -1156,70 +1158,93 @@ export class App {
     ];
     const skillTreeHtml = categories.map(cat => {
       const items = upgrades.filter(u => u.category === cat.key);
-      const rowHtml = items.map(u => {
+      if (items.length === 0) return '';
+      const nodesHtml = items.map((u, i) => {
         const prereqMet = !u.requires || u.requires.every(rid => upgrades.find(r => r.id === rid && r.purchased));
         const locked = u.unlockLevel > level;
         const canBuy = prereqMet && !u.purchased && !locked && money >= u.cost;
-        const dimmed = !prereqMet || locked;
-        return `
-        <div class="skill-item ${u.purchased ? 'skill-purchased' : dimmed ? 'skill-locked' : ''}">
-          <div class="skill-name">${u.name}</div>
-          <div class="skill-desc">${u.description}</div>
-          ${u.requires ? `<div class="skill-req">→ ${u.requires.map(rid => upgrades.find(r => r.id === rid)?.name ?? rid).join(', ')}が必要</div>` : ''}
-          <div class="skill-footer">
-            <span class="skill-cost">¥${u.cost.toLocaleString()}</span>
-            ${u.purchased
-              ? '<span class="skill-done">✅ 購入済</span>'
-              : locked
-                ? `<span class="skill-locked-badge">🔒 Lv.${u.unlockLevel}</span>`
-                : `<button class="upgrade-btn" data-upgrade="${u.id}" ${canBuy ? '' : 'disabled'}>${money >= u.cost && prereqMet ? '購入' : !prereqMet ? '前提未購入' : '資金不足'}</button>`
+        let stateClass = '';
+        if (u.purchased) stateClass = 'snode-purchased';
+        else if (locked) stateClass = 'snode-lv-locked';
+        else if (!prereqMet) stateClass = 'snode-prereq-locked';
+        else stateClass = 'snode-available';
+        const connector = i > 0 ? `<div class="snode-connector">→</div>` : '';
+        const btnLabel = u.purchased ? '✅ 購入済' : locked ? `🔒 Lv.${u.unlockLevel}` : !prereqMet ? '前提未購入' : money >= u.cost ? '購入する' : '資金不足';
+        return `${connector}
+        <div class="snode ${stateClass}">
+          <div class="snode-name">${u.name}</div>
+          <div class="snode-desc">${u.description}</div>
+          <div class="snode-footer">
+            <span class="snode-cost">${u.purchased ? '' : '¥' + u.cost.toLocaleString()}</span>
+            ${!u.purchased
+              ? `<button class="upgrade-btn snode-btn" data-upgrade="${u.id}" ${canBuy ? '' : 'disabled'}>${btnLabel}</button>`
+              : `<span class="snode-done">${btnLabel}</span>`
             }
           </div>
         </div>`;
       }).join('');
-      if (items.length === 0) return '';
       return `
-      <div class="skill-category">
-        <div class="skill-category-title">${cat.icon} ${cat.label}</div>
-        ${rowHtml}
+      <div class="skill-tree-row">
+        <div class="skill-cat-label">${cat.icon}<br><span>${cat.label}</span></div>
+        <div class="skill-nodes-row">${nodesHtml}</div>
       </div>`;
     }).join('');
 
-    // 船員管理UI
-    const crewHtml = CREW_MEMBERS.map(template => {
-      const c = crew.find(cr => cr.id === template.id)!;
+    // 雇用済みクルー管理UI
+    const hiredCrewHtml = crew.map(c => {
       const bond = this.state.bondLevels[c.id] ?? 0;
       const bondHearts = '♥'.repeat(bond) + '♡'.repeat(5 - bond);
-      const unlocked = !template.unlockLevel || template.unlockLevel <= level;
-      const canHire = !c.hired && unlocked && money >= c.hireCost;
-      const canUpgrade = c.hired && c.upgradeLevel < 3 && money >= c.upgradeCosts[c.upgradeLevel];
+      const canUpgrade = c.upgradeLevel < 3 && money >= c.upgradeCosts[c.upgradeLevel];
+      const canFire = c.id !== 'veteran';
       return `
-      <div class="crew-manage-card ${c.hired ? 'crew-hired' : ''}">
+      <div class="crew-manage-card crew-hired">
         <div class="crew-manage-header">
           <span class="crew-icon">${c.icon}</span>
-          <div>
+          <div style="flex:1">
             <div class="crew-manage-name">${c.name}</div>
-            ${c.hired ? `<div class="crew-manage-lv">Lv.${c.upgradeLevel} <span class="bond-hearts" style="font-size:0.7rem">${bondHearts}</span></div>` : ''}
+            <div class="crew-manage-lv">Lv.${c.upgradeLevel} <span class="bond-hearts" style="font-size:0.7rem">${bondHearts}</span></div>
           </div>
-          ${!unlocked ? `<span class="skill-locked-badge" style="margin-left:auto">🔒 Lv.${template.unlockLevel}</span>` : ''}
+          ${canFire ? `<button class="fire-btn" data-fire-crew="${c.id}" title="解雇">🚪解雇</button>` : '<span style="font-size:0.65rem;color:var(--text-muted)">解雇不可</span>'}
         </div>
         <div class="crew-manage-desc">${c.description}</div>
         <div class="crew-manage-footer">
-          ${!c.hired
-            ? `<span class="crew-hire-cost">採用: ¥${c.hireCost.toLocaleString()}</span>
-               <button class="upgrade-btn" data-hire-crew="${c.id}" ${canHire ? '' : 'disabled'}>
-                 ${!unlocked ? '🔒' : !canHire && c.hireCost > 0 ? '資金不足' : c.hireCost === 0 ? '採用済' : '採用する'}
-               </button>`
-            : c.upgradeLevel < 3
-              ? `<span class="crew-hire-cost">強化: ¥${c.upgradeCosts[c.upgradeLevel].toLocaleString()} (Lv${c.upgradeLevel}→${c.upgradeLevel + 1})</span>
-                 <button class="upgrade-btn" data-upgrade-crew="${c.id}" ${canUpgrade ? '' : 'disabled'}>
-                   ${canUpgrade ? 'スキルUP' : '資金不足'}
-                 </button>`
-              : '<span style="color:var(--accent-gold);font-size:0.75rem">✨ MAX強化済</span>'
+          ${c.upgradeLevel < 3
+            ? `<span class="crew-hire-cost">強化: ¥${c.upgradeCosts[c.upgradeLevel].toLocaleString()} (Lv${c.upgradeLevel}→${c.upgradeLevel + 1})</span>
+               <button class="upgrade-btn" data-upgrade-crew="${c.id}" ${canUpgrade ? '' : 'disabled'}>${canUpgrade ? 'スキルUP' : '資金不足'}</button>`
+            : '<span style="color:var(--accent-gold);font-size:0.75rem">✨ MAX強化済</span>'
           }
         </div>
       </div>`;
     }).join('');
+
+    // 今月の応募者UI
+    const applicants = this.state.applicants;
+    const applicantsHtml = applicants.length === 0
+      ? '<div style="color:var(--text-muted);font-size:0.75rem;padding:6px">今月の応募者はいません</div>'
+      : applicants.map(c => {
+          const canHire = money >= c.hireCost;
+          const yieldPct = Math.round(c.baseYieldBonus * 100);
+          const specialBadge = c.specialMethod
+            ? `<span class="crew-special-badge">⭐${FISHING_METHODS.find(m => m.id === c.specialMethod)?.name ?? c.specialMethod}専門</span>`
+            : '';
+          return `
+          <div class="crew-manage-card applicant-card">
+            <div class="crew-manage-header">
+              <span class="crew-icon">${c.icon}</span>
+              <div style="flex:1">
+                <div class="crew-manage-name">${c.name} ${specialBadge}</div>
+                <div style="font-size:0.65rem;color:var(--text-muted)">
+                  水揚げ ${yieldPct >= 0 ? '+' : ''}${yieldPct}% ／ 安定性 ${c.baseStabilityBonus >= 0 ? '+' : ''}${Math.round(c.baseStabilityBonus * 100)}%
+                </div>
+              </div>
+            </div>
+            <div class="crew-manage-desc">${c.description}</div>
+            <div class="crew-manage-footer">
+              <span class="crew-hire-cost">採用費: ¥${c.hireCost.toLocaleString()}</span>
+              <button class="upgrade-btn" data-hire-applicant="${c.id}" ${canHire ? '' : 'disabled'}>${canHire ? '採用する' : '資金不足'}</button>
+            </div>
+          </div>`;
+        }).join('');
 
     return `
     <div class="panel-header">成長・解放</div>
@@ -1245,12 +1270,16 @@ export class App {
           </div>
         </div>` : ''}
         <div>
-          <div style="font-size:0.8rem;font-weight:700;margin-bottom:6px">⚡ スキルツリー</div>
-          <div class="skill-tree-grid">${skillTreeHtml}</div>
+          <div style="font-size:0.8rem;font-weight:700;margin-bottom:8px">⚡ スキルツリー</div>
+          <div class="skill-tree-container">${skillTreeHtml}</div>
         </div>
         <div>
-          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">👨‍✈️ 船員管理</div>
-          <div class="crew-manage-grid">${crewHtml}</div>
+          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">👨‍✈️ 雇用済みクルー（${crew.length}名）</div>
+          <div class="crew-manage-grid">${hiredCrewHtml}</div>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">📋 今月の応募者</div>
+          <div class="crew-manage-grid">${applicantsHtml}</div>
         </div>
         <button id="next-month-btn" class="next-btn">
           ${this.state.month >= 12 ? '🏁 ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
@@ -1271,12 +1300,22 @@ export class App {
         this.updateMoneyDisplay();
       });
     });
-    // 船員雇用
-    document.querySelectorAll('[data-hire-crew]').forEach(btn => {
+    // 応募者採用
+    document.querySelectorAll('[data-hire-applicant]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const crewId = (btn as HTMLElement).dataset.hireCrew!;
+        const crewId = (btn as HTMLElement).dataset.hireApplicant!;
         audioManager.playSE('coin');
-        this.state = hireCrew(this.state, crewId);
+        this.state = hireApplicant(this.state, crewId);
+        this.refreshCenterPanel();
+        this.updateMoneyDisplay();
+      });
+    });
+    // クルー解雇
+    document.querySelectorAll('[data-fire-crew]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const crewId = (btn as HTMLElement).dataset.fireCrew!;
+        audioManager.playSE('click');
+        this.state = fireCrew(this.state, crewId);
         this.refreshCenterPanel();
         this.updateMoneyDisplay();
       });
@@ -1729,7 +1768,7 @@ export class App {
           <div class="score-row"><span>解放ボーナス (${unlockedAreas.length}海域/${unlockedMethods.length}漁法)</span><span class="text-gold">+¥${unlockedBonus.toLocaleString()}</span></div>
           <div class="score-row"><span>評判ボーナス (${reputation}pt)</span><span class="text-gold">+¥${repBonus.toLocaleString()}</span></div>
           ${debt > 0 ? `<div class="score-row"><span>借金ペナルティ</span><span class="text-red">-¥${debtPenalty.toLocaleString()}</span></div>` : ''}
-          <div class="score-row"><span>難易度補正 (☠️激ムズ)</span><span>×${dm}</span></div>
+          <div class="score-row"><span>スコア倍率</span><span>×${dm}</span></div>
           <div class="score-row total"><span>最終スコア</span><span class="text-gold">${score.toLocaleString()} pt</span></div>
         </div>
         <div id="ranking-section"><div style="color:var(--text-muted);font-size:0.8rem">ランキングを読み込み中...</div></div>
@@ -1756,7 +1795,7 @@ export class App {
       this.render();
     });
     document.getElementById('share-btn')?.addEventListener('click', () => {
-      const text = `【石川漁業シミュレーション】\n${this.state.companyName} スコア: ${score.toLocaleString()}pt\n難易度: ☠️激ムズ Lv.${this.state.level}`;
+      const text = `【石川漁業シミュレーション】\n${this.state.companyName} スコア: ${score.toLocaleString()}pt\n Lv.${this.state.level}`;
       navigator.clipboard.writeText(text).catch(() => prompt('結果テキスト:', text));
     });
   }
