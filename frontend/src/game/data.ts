@@ -798,6 +798,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -550000, yieldMultiplier: 0.2 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'fisherman-advice',
@@ -819,6 +820,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.9 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'market-rumor',
@@ -840,6 +842,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -100000, yieldMultiplier: 0.7 },
       },
     ],
+    mechanic: 'card',
   },
   {
     id: 'sudden-storm',
@@ -861,6 +864,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -450000, yieldMultiplier: 0.2 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'rival-info',
@@ -882,6 +886,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.88 },
       },
     ],
+    mechanic: 'dice',
   },
   {
     id: 'equipment-malfunction',
@@ -903,6 +908,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -220000, yieldMultiplier: 0.48 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'high-price-buyer',
@@ -945,6 +951,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.95 },
       },
     ],
+    mechanic: 'card',
   },
   // ===== 新追加：通常イベント =====
   {
@@ -967,6 +974,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -700000, yieldMultiplier: 0.05 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'media-coverage',
@@ -1009,6 +1017,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.95 },
       },
     ],
+    mechanic: 'dice',
   },
   {
     id: 'cooperative-fishing',
@@ -1093,6 +1102,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.95 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'harbor-gossip',
@@ -1135,6 +1145,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.65 },
       },
     ],
+    mechanic: 'dice',
   },
   {
     id: 'crew-accident',
@@ -1156,6 +1167,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -500000, yieldMultiplier: 0.2, reputationDelta: -10 },
       },
     ],
+    mechanic: 'card',
   },
   {
     id: 'big-wave-opportunity',
@@ -1198,6 +1210,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -150000, yieldMultiplier: 0.75 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'fog-navigation',
@@ -1240,6 +1253,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -200000, yieldMultiplier: 0.5 },
       },
     ],
+    mechanic: 'gauge',
   },
   {
     id: 'buyer-offer',
@@ -1303,6 +1317,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -300000, reputationDelta: -15, yieldMultiplier: 0.5 },
       },
     ],
+    mechanic: 'dice',
   },
   {
     id: 'net-repair',
@@ -1324,6 +1339,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -500000, yieldMultiplier: 0.3 },
       },
     ],
+    mechanic: 'gauge',
   },
   // ===== リスク中・高のみのイベント =====
   {
@@ -1346,6 +1362,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { moneyDelta: -300000, yieldMultiplier: 0.3 },
       },
     ],
+    mechanic: 'roulette',
   },
   {
     id: 'poaching-area',
@@ -1388,6 +1405,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         failureEffect: { yieldMultiplier: 0.85 },
       },
     ],
+    mechanic: 'dice',
   },
   {
     id: 'black-market',
@@ -1407,6 +1425,235 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
         risk: 'medium',
         effect: { yieldMultiplier: 1.05, reputationDelta: 1 },
         failureEffect: { yieldMultiplier: 0.95 },
+      },
+    ],
+    mechanic: 'roulette',
+  },
+  // ===== 新イベント：石川漁業ミニゲーム =====
+  {
+    id: 'kano-crab-rush',
+    title: '🦀 加能ガニ緊急入荷',
+    description: '料亭から「加能ガニをすぐ大量に用意してほしい」と依頼が来た。無理をして増産するか、断るか。',
+    mechanic: 'gauge' as const,
+    options: [
+      {
+        label: '全力で増産する',
+        description: '操業を無理に延長。成功すれば特大報酬。',
+        risk: 'high' as const,
+        effect: { moneyDelta: 600000, yieldMultiplier: 1.4 },
+        failureEffect: { moneyDelta: -200000, yieldMultiplier: 0.6 },
+      },
+      {
+        label: '通常範囲で対応する',
+        description: '無理せず安定的に納品。',
+        risk: 'low' as const,
+        effect: { moneyDelta: 120000, yieldMultiplier: 1.1 },
+        failureEffect: { moneyDelta: -30000, yieldMultiplier: 0.95 },
+      },
+    ],
+  },
+  {
+    id: 'nodoguro-scarcity',
+    title: '🐟 のどぐろ品薄騒動',
+    description: '全国的にのどぐろが不足。今が売り時か、それとも様子を見るか。',
+    mechanic: 'card' as const,
+    options: [
+      {
+        label: '今すぐ全量を高値売り',
+        description: '相場は読めないが今は高い。',
+        risk: 'medium' as const,
+        effect: { moneyDelta: 450000 },
+        failureEffect: { moneyDelta: 80000 },
+      },
+      {
+        label: '半分だけ売り様子見',
+        description: 'リスク分散。確実に一定を稼ぐ。',
+        risk: 'low' as const,
+        effect: { moneyDelta: 200000 },
+        failureEffect: { moneyDelta: 100000 },
+      },
+    ],
+  },
+  {
+    id: 'fishing-festival',
+    title: '🎏 能登漁師まつり',
+    description: '地元の漁師まつりへの協賛依頼。協賛すれば評判アップ、断れば資金節約。',
+    mechanic: 'dice' as const,
+    options: [
+      {
+        label: '大口協賛する（¥200,000）',
+        description: '評判が大幅アップ。地域との繋がりを強化。',
+        risk: 'medium' as const,
+        effect: { moneyDelta: -200000, reputationDelta: 25 },
+        failureEffect: { moneyDelta: -200000, reputationDelta: 8 },
+      },
+      {
+        label: '小口協賛する（¥50,000）',
+        description: '最低限の評判維持。',
+        risk: 'low' as const,
+        effect: { moneyDelta: -50000, reputationDelta: 8 },
+        failureEffect: { moneyDelta: -50000, reputationDelta: 3 },
+      },
+      {
+        label: '断る',
+        description: '資金を節約。評判は下がるかも。',
+        risk: 'low' as const,
+        effect: { reputationDelta: -5 },
+        failureEffect: { reputationDelta: -15 },
+      },
+    ],
+  },
+  {
+    id: 'ocean-current-shift',
+    title: '🌊 海流の急変',
+    description: '潮流が急激に変化。魚群の位置が読めなくなった。どう対処する？',
+    mechanic: 'gauge' as const,
+    options: [
+      {
+        label: '海流を読んで追いかける',
+        description: '熟練の判断で魚群を追う。成功すれば大漁。',
+        risk: 'high' as const,
+        effect: { yieldMultiplier: 1.7 },
+        failureEffect: { yieldMultiplier: 0.4, moneyDelta: -100000 },
+      },
+      {
+        label: '固定ポイントで粘る',
+        description: '安定を重視。大崩れはしないが期待値は低め。',
+        risk: 'low' as const,
+        effect: { yieldMultiplier: 0.9 },
+        failureEffect: { yieldMultiplier: 0.75 },
+      },
+    ],
+  },
+  {
+    id: 'tv-coverage',
+    title: '📺 テレビ取材',
+    description: '地方テレビ局から「漁師密着取材をしたい」と依頼。放映されれば評判爆上がり。',
+    mechanic: 'card' as const,
+    options: [
+      {
+        label: '快く受け入れる',
+        description: '取材を全面協力。放映内容次第で評判が大きく変わる。',
+        risk: 'medium' as const,
+        effect: { reputationDelta: 30, moneyDelta: 50000 },
+        failureEffect: { reputationDelta: -10, moneyDelta: -80000 },
+      },
+      {
+        label: '条件付きで受ける',
+        description: '都合の悪い部分は撮影禁止にする。',
+        risk: 'low' as const,
+        effect: { reputationDelta: 12, moneyDelta: 20000 },
+        failureEffect: { reputationDelta: -3 },
+      },
+    ],
+  },
+  {
+    id: 'fuel-price-spike',
+    title: '⛽ 燃料価格高騰',
+    description: '国際情勢により軽油価格が急騰。今後の操業計画を見直すか。',
+    mechanic: 'dice' as const,
+    options: [
+      {
+        label: '燃料を大量に先物買いする',
+        description: '今のうちに買い込む。相場読み次第で得にも損にも。',
+        risk: 'medium' as const,
+        effect: { moneyDelta: -300000, yieldMultiplier: 1.2 },
+        failureEffect: { moneyDelta: -500000, yieldMultiplier: 0.9 },
+      },
+      {
+        label: '近場の操業に切り替える',
+        description: '燃料節約優先。遠征は控える。',
+        risk: 'low' as const,
+        effect: { moneyDelta: 80000, yieldMultiplier: 0.85 },
+        failureEffect: { moneyDelta: -20000, yieldMultiplier: 0.75 },
+      },
+    ],
+  },
+  {
+    id: 'veteran-retirement',
+    title: '👴 ベテラン船員の引退危機',
+    description: '長年の相棒が「そろそろ引退したい」と言い出した。引き止めるか、後任を探すか。',
+    mechanic: 'card' as const,
+    options: [
+      {
+        label: '給料を上げて引き止める',
+        description: '毎月¥100,000追加。でも技術は残る。',
+        risk: 'low' as const,
+        effect: { moneyDelta: -100000, yieldMultiplier: 1.15, reputationDelta: 5 },
+        failureEffect: { moneyDelta: -100000, yieldMultiplier: 0.95 },
+      },
+      {
+        label: '潔く送り出し後任育成',
+        description: '短期的に戦力ダウンだが長期的には人材育成に繋がる。',
+        risk: 'medium' as const,
+        effect: { yieldMultiplier: 0.85, reputationDelta: 15 },
+        failureEffect: { yieldMultiplier: 0.65, moneyDelta: -150000 },
+      },
+    ],
+  },
+  {
+    id: 'mystery-shoal',
+    title: '🐠 謎の魚群レーダー反応',
+    description: '魚群探知機が通常の2倍の反応を示している。未確認の大魚群か、誤作動か。',
+    mechanic: 'roulette' as const,
+    options: [
+      {
+        label: '全力で網を投じる',
+        description: '全賭け。外れれば大損、当たれば大漁。',
+        risk: 'high' as const,
+        effect: { yieldMultiplier: 2.5, moneyDelta: 200000 },
+        failureEffect: { yieldMultiplier: 0.3, moneyDelta: -400000 },
+      },
+      {
+        label: '様子を見てから判断',
+        description: '確認してから動く。無難。',
+        risk: 'low' as const,
+        effect: { yieldMultiplier: 1.3 },
+        failureEffect: { yieldMultiplier: 0.85 },
+      },
+    ],
+  },
+  {
+    id: 'tourism-cooperation',
+    title: '🚢 観光船との協業提案',
+    description: '観光会社から「漁師体験ツアー」への協力依頼。本業に影響するが収益になる可能性も。',
+    mechanic: 'dice' as const,
+    options: [
+      {
+        label: '積極的に協力する',
+        description: '観光収益 + 評判UP。でも漁の時間が削られる。',
+        risk: 'medium' as const,
+        effect: { moneyDelta: 250000, reputationDelta: 20, yieldMultiplier: 0.85 },
+        failureEffect: { moneyDelta: 50000, reputationDelta: -5, yieldMultiplier: 0.7 },
+      },
+      {
+        label: '断る',
+        description: '漁に専念。本業一本で勝負。',
+        risk: 'low' as const,
+        effect: { yieldMultiplier: 1.1 },
+        failureEffect: { reputationDelta: -8 },
+      },
+    ],
+  },
+  {
+    id: 'night-fishing-opportunity',
+    title: '🌙 夜間漁の好機',
+    description: '夜の海況が絶好の漁条件。疲労を押して夜間操業に挑むか。',
+    mechanic: 'gauge' as const,
+    options: [
+      {
+        label: '夜間操業を決行',
+        description: 'タイミングが命。丁寧な操作で大漁を狙う。',
+        risk: 'medium' as const,
+        effect: { yieldMultiplier: 1.6, moneyDelta: -80000 },
+        failureEffect: { yieldMultiplier: 0.7, moneyDelta: -180000 },
+      },
+      {
+        label: '朝まで待つ',
+        description: '安全重視。翌朝に通常操業。',
+        risk: 'low' as const,
+        effect: { yieldMultiplier: 1.0 },
+        failureEffect: { yieldMultiplier: 0.9 },
       },
     ],
   },

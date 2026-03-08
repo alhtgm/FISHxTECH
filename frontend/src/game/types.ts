@@ -151,10 +151,11 @@ export interface EventTemplate {
   id: string;
   title: string;
   description: string;
-  applicableAreas?: string[];  // nullなら全海域
+  applicableAreas?: string[];
   applicableMethods?: string[];
   options: EventOption[];
-  isQuick?: boolean;  // true=クイック決断（ルーレットなし・即時効果）
+  isQuick?: boolean;
+  mechanic?: 'roulette' | 'gauge' | 'card' | 'dice'; // ミニゲーム種類（未指定=roulette）
 }
 
 export interface EventOption {

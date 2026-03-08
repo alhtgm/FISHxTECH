@@ -1747,122 +1747,347 @@ export class App {
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return;
 
-    // 全イベントルーレット方式
+    const mechanic = event.template.mechanic ?? 'roulette';
+
     document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
       btn.addEventListener('click', () => {
         const option = event.template.options[i];
-        this.showRoulette(option, (success) => {
+        const callback = (success: boolean) => {
           this.setState(s => resolveEvent(s, option, success));
-        });
+        };
+        switch (mechanic) {
+          case 'gauge': this.showGaugeStop(option, callback); break;
+          case 'card':  this.showCardDraw(option, callback);  break;
+          case 'dice':  this.showDiceRoll(option, callback);  break;
+          default:      this.showRoulette(option, callback);  break;
+        }
       });
     });
   }
 
   // ========================================
-  // ルーレット抽選（ニードル回転方式）
+  // ミニゲーム①: ルーレット（シンプル円盤）
   // ========================================
   private showRoulette(option: EventOption, callback: (success: boolean) => void) {
     const successRates: Record<string, number> = { low: 0.70, medium: 0.50, high: 0.10 };
     const baseRate = successRates[option.risk] ?? 0.5;
+    const crewBonus = getCrewEventBonus(this.state);
+    const rate = Math.min(0.95, Math.max(0.05, baseRate + crewBonus));
+    const success = Math.random() < rate;
 
-    const crewEventBonus = getCrewEventBonus(this.state);
-    const adjustedRate = Math.min(0.95, Math.max(0.05, baseRate + crewEventBonus));
-    const finalSuccess = Math.random() < adjustedRate;
+    const greenPct = Math.round(rate * 100);
+    const greenDeg = rate * 360;
 
-    const greenPct = Math.round(adjustedRate * 100);
-    const redPct = 100 - greenPct;
-    const greenEndDeg = adjustedRate * 360;
-
-    // ニードル方式: ディスク固定、針が回転
-    // 針の最終角度 = 結果ゾーン内のランダム位置 + 何周かのスピン
-    const spins = 4 + Math.floor(Math.random() * 3);
-    let sectorAngle: number;
-    if (finalSuccess) {
-      // 緑ゾーン: 0° 〜 greenEndDeg
-      const margin = Math.max(5, greenEndDeg * 0.08);
-      sectorAngle = margin + Math.random() * (greenEndDeg - 2 * margin);
-    } else {
-      // 赤ゾーン: greenEndDeg 〜 360°
-      const redDeg = 360 - greenEndDeg;
-      const margin = Math.max(5, redDeg * 0.08);
-      sectorAngle = greenEndDeg + margin + Math.random() * (redDeg - 2 * margin);
-    }
-    const finalNeedleAngle = spins * 360 + sectorAngle;
-    const spinDuration = 2.0 + spins * 0.25;
-
-    const riskLabel = option.risk === 'low' ? '低リスク' : option.risk === 'medium' ? '中リスク' : '⚠️ 高リスク';
-    const fisherBonus = crewEventBonus !== 0
-      ? `<span class="roulette-fisher-bonus ${crewEventBonus > 0 ? 'positive' : 'negative'}">クルー補正: ${crewEventBonus > 0 ? '+' : ''}${Math.round(crewEventBonus * 100)}%</span>`
-      : '';
+    const spins = 5 + Math.floor(Math.random() * 3);
+    const targetAngle = success
+      ? (Math.random() * greenDeg * 0.85 + greenDeg * 0.075)
+      : (greenDeg + Math.random() * (360 - greenDeg) * 0.85 + (360 - greenDeg) * 0.075);
+    const finalAngle = spins * 360 + targetAngle;
+    const duration = 3.0 + Math.random() * 0.5;
 
     const overlay = document.createElement('div');
-    overlay.className = 'roulette-overlay';
+    overlay.className = 'minigame-overlay';
     overlay.innerHTML = `
-    <div class="roulette-modal">
-      <div class="roulette-title">🎯 ルーレット抽選</div>
-      <div class="roulette-info-row">
-        <span class="risk-badge ${option.risk}">${riskLabel}</span>
-        <span class="roulette-rates"><span class="rate-success">成功 ${greenPct}%</span> / <span class="rate-fail">失敗 ${redPct}%</span></span>
-        ${fisherBonus}
+    <div class="minigame-modal roulette-modal-v2">
+      <div class="mg-header">
+        <span class="mg-type-badge">🎡 ルーレット</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
       </div>
-      <div class="roulette-wheel-area">
-        <div class="roulette-static-pointer">▼</div>
-        <div class="roulette-disc"
-          style="background: conic-gradient(#2ec4b6 0deg ${greenEndDeg}deg, #e63946 ${greenEndDeg}deg 360deg)">
-          <div class="roulette-disc-inner"></div>
-          ${greenPct >= 10 ? `<div class="roulette-sector-label" style="transform:translate(-50%,-50%) rotate(${greenEndDeg/2}deg) translateY(-38px) rotate(-${greenEndDeg/2}deg)">✅ ${greenPct}%</div>` : ''}
-          ${redPct >= 10 ? `<div class="roulette-sector-label fail-sl" style="transform:translate(-50%,-50%) rotate(${greenEndDeg + (360-greenEndDeg)/2}deg) translateY(-38px) rotate(-${greenEndDeg + (360-greenEndDeg)/2}deg)">❌ ${redPct}%</div>` : ''}
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-rates">
+        <span class="rate-success">成功 ${greenPct}%</span>
+        <span class="rate-sep">/</span>
+        <span class="rate-fail">失敗 ${100 - greenPct}%</span>
+        ${crewBonus !== 0 ? `<span class="mg-crew-bonus ${crewBonus > 0 ? 'pos' : 'neg'}">クルー${crewBonus > 0 ? '+' : ''}${Math.round(crewBonus * 100)}%</span>` : ''}
+      </div>
+      <div class="rv2-wheel-wrap">
+        <div class="rv2-pointer">▼</div>
+        <div class="rv2-disc" id="rv2-disc"
+          style="background: conic-gradient(var(--px-green) 0deg ${greenDeg}deg, var(--px-red) ${greenDeg}deg 360deg)">
+          <div class="rv2-disc-inner">
+            <span class="rv2-disc-label success-label" style="transform:rotate(${greenDeg / 2}deg) translateY(-52px) rotate(-${greenDeg / 2}deg)">✅<br>${greenPct}%</span>
+            ${100 - greenPct >= 10 ? `<span class="rv2-disc-label fail-label" style="transform:rotate(${greenDeg + (360 - greenDeg) / 2}deg) translateY(-52px) rotate(-${greenDeg + (360 - greenDeg) / 2}deg)">❌<br>${100 - greenPct}%</span>` : ''}
+          </div>
         </div>
-        <div class="roulette-needle" id="roulette-needle"></div>
-        <div class="roulette-center-cap"></div>
       </div>
-      <div class="roulette-result" id="roulette-result"></div>
-      <button class="roulette-confirm-btn" id="roulette-confirm" style="display:none">続ける →</button>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
     </div>`;
     document.body.appendChild(overlay);
-
     audioManager.playSE('event');
 
-    // ティック音（スピン加速→減速に合わせた間隔）
-    const tickTimes = [0, 90, 170, 260, 380, 530, 720, 960, 1260, 1620, 2040];
-    tickTimes.filter(t => t < spinDuration * 900).forEach(t => {
-      setTimeout(() => audioManager.playSE('roulette-tick'), 200 + t);
-    });
+    const ticks = [0, 100, 190, 280, 400, 560, 760, 1010, 1320, 1700, 2180];
+    ticks.filter(t => t < duration * 800).forEach(t =>
+      setTimeout(() => audioManager.playSE('roulette-tick'), 300 + t));
 
-    // 針スピン開始
     setTimeout(() => {
-      const needle = document.getElementById('roulette-needle');
-      if (!needle) return;
-      needle.style.transition = `transform ${spinDuration}s cubic-bezier(0.17, 0.67, 0.12, 0.99)`;
-      needle.style.transform = `rotate(${finalNeedleAngle}deg)`;
-    }, 200);
+      const disc = document.getElementById('rv2-disc');
+      if (disc) {
+        disc.style.transition = `transform ${duration}s cubic-bezier(0.15, 0.7, 0.1, 1)`;
+        disc.style.transform = `rotate(${finalAngle}deg)`;
+      }
+    }, 300);
 
-    // 結果表示
     setTimeout(() => {
-      const resultEl = document.getElementById('roulette-result');
-      const confirmBtn = document.getElementById('roulette-confirm');
+      const resultEl = document.getElementById('mg-result');
+      const confirmBtn = document.getElementById('mg-confirm');
       if (!resultEl || !confirmBtn) return;
-
-      const discEl = overlay.querySelector('.roulette-disc') as HTMLElement | null;
-      if (finalSuccess) {
+      if (success) {
         audioManager.playSE('roulette-success');
-        const desc = this.describeEffect(option.effect);
-        resultEl.innerHTML = `<div class="roulette-success">✅ 成功！<div class="roulette-effect-desc">${desc}</div></div>`;
-        discEl?.classList.add('result-success-glow');
+        resultEl.innerHTML = `<div class="mg-success">✅ 成功！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
       } else {
         audioManager.playSE('roulette-fail');
-        const failEff = option.failureEffect ?? option.effect;
-        const desc = this.describeEffect(failEff);
-        resultEl.innerHTML = `<div class="roulette-failure">❌ 失敗...<div class="roulette-effect-desc">${desc}</div></div>`;
-        discEl?.classList.add('result-fail-glow');
+        resultEl.innerHTML = `<div class="mg-failure">❌ 失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
       }
-      resultEl.classList.add('visible');
-      confirmBtn.style.display = 'block';
-      confirmBtn.addEventListener('click', () => {
-        overlay.remove();
-        callback(finalSuccess);
+      confirmBtn.classList.remove('hidden');
+      confirmBtn.addEventListener('click', () => { overlay.remove(); callback(success); });
+    }, (duration + 0.6) * 1000);
+  }
+
+  // ========================================
+  // ミニゲーム②: ゲージ止め
+  // ========================================
+  private showGaugeStop(option: EventOption, callback: (success: boolean) => void) {
+    const successWidths: Record<string, number> = { low: 48, medium: 30, high: 15 };
+    const crewBonus = getCrewEventBonus(this.state);
+    const baseWidth = successWidths[option.risk] ?? 30;
+    const successWidth = Math.min(70, Math.max(8, baseWidth + crewBonus * 100));
+    const successStart = Math.random() * (100 - successWidth);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">⏱️ ゲージ止め</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">SUCCESS ZONE に止めろ！</div>
+      <div class="gauge-bar-wrap">
+        <div class="gauge-bar">
+          <div class="gauge-success-zone" id="gauge-zone" style="left:${successStart}%;width:${successWidth}%">
+            <span class="gauge-zone-label">SUCCESS</span>
+          </div>
+          <div class="gauge-cursor" id="gauge-cursor"></div>
+        </div>
+      </div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 ゾーン${crewBonus > 0 ? '+' : ''}${Math.round(crewBonus * 100)}%</div>` : ''}
+      <button class="mg-stop-btn" id="gauge-stop-btn">■ STOP!</button>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    let pos = 0;
+    let dir = 1;
+    const speed = option.risk === 'high' ? 1.4 : option.risk === 'medium' ? 0.9 : 0.55;
+    let rafId: number;
+    let stopped = false;
+
+    const cursor = document.getElementById('gauge-cursor');
+    const stopBtn = document.getElementById('gauge-stop-btn');
+    const resultEl = document.getElementById('mg-result');
+    const confirmBtn = document.getElementById('mg-confirm');
+
+    const animate = () => {
+      pos += dir * speed;
+      if (pos >= 99) { pos = 99; dir = -1; }
+      if (pos <= 0)  { pos = 0;  dir = 1; }
+      if (cursor) cursor.style.left = `${pos}%`;
+      if (!stopped) rafId = requestAnimationFrame(animate);
+    };
+    rafId = requestAnimationFrame(animate);
+
+    stopBtn?.addEventListener('click', () => {
+      if (stopped) return;
+      stopped = true;
+      cancelAnimationFrame(rafId);
+      if (stopBtn) { (stopBtn as HTMLButtonElement).disabled = true; stopBtn.textContent = '■ STOPPED'; }
+
+      const inZone = pos >= successStart && pos <= successStart + successWidth;
+      if (!resultEl || !confirmBtn) return;
+      if (inZone) {
+        audioManager.playSE('roulette-success');
+        resultEl.innerHTML = `<div class="mg-success">✅ 成功！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+        if (cursor) cursor.classList.add('gauge-cursor-success');
+      } else {
+        audioManager.playSE('roulette-fail');
+        resultEl.innerHTML = `<div class="mg-failure">❌ 失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+        if (cursor) cursor.classList.add('gauge-cursor-fail');
+      }
+      confirmBtn.classList.remove('hidden');
+      confirmBtn.addEventListener('click', () => { overlay.remove(); callback(inZone); });
+    });
+  }
+
+  // ========================================
+  // ミニゲーム③: カード引き
+  // ========================================
+  private showCardDraw(option: EventOption, callback: (success: boolean) => void) {
+    const configs: Record<string, { total: number; success: number }> = {
+      low:    { total: 4, success: 3 },
+      medium: { total: 4, success: 2 },
+      high:   { total: 5, success: 1 },
+    };
+    const crewBonus = getCrewEventBonus(this.state);
+    const conf = configs[option.risk] ?? { total: 4, success: 2 };
+    const totalCards = conf.total;
+    let successCards = Math.min(conf.total - 1, Math.round(conf.success + crewBonus * totalCards));
+    successCards = Math.max(1, successCards);
+
+    const cards = Array(totalCards).fill(false).fill(true, 0, successCards);
+    // シャッフル
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+
+    const cardsHtml = cards.map((_, i) =>
+      `<div class="draw-card" id="draw-card-${i}" data-index="${i}">
+        <div class="draw-card-face front">🂠</div>
+        <div class="draw-card-face back"></div>
+      </div>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">🂠 カード引き</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">${successCards}/${totalCards} 枚が当たり。1枚引け！</div>
+      <div class="draw-cards-row">${cardsHtml}</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 当たり+${Math.round(crewBonus * totalCards * 10) / 10}枚分</div>` : ''}
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    overlay.querySelectorAll('.draw-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        if (overlay.querySelector('.draw-card.flipped')) return; // already picked
+        const idx = parseInt((card as HTMLElement).dataset.index ?? '0');
+        const isSuccess = cards[idx];
+
+        card.classList.add('flipped');
+        const backFace = card.querySelector('.draw-card-face.back') as HTMLElement;
+        if (backFace) backFace.textContent = isSuccess ? '✅' : '❌';
+
+        setTimeout(() => {
+          // すべてのカードを公開
+          overlay.querySelectorAll('.draw-card').forEach((c, ci) => {
+            if (ci !== idx) {
+              c.classList.add('flipped', 'revealed');
+              const bf = c.querySelector('.draw-card-face.back') as HTMLElement;
+              if (bf) bf.textContent = cards[ci] ? '🐟' : '💀';
+            }
+          });
+
+          const resultEl = document.getElementById('mg-result');
+          const confirmBtn = document.getElementById('mg-confirm');
+          if (!resultEl || !confirmBtn) return;
+          if (isSuccess) {
+            audioManager.playSE('roulette-success');
+            resultEl.innerHTML = `<div class="mg-success">✅ 当たり！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+          } else {
+            audioManager.playSE('roulette-fail');
+            resultEl.innerHTML = `<div class="mg-failure">❌ はずれ...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+          }
+          confirmBtn.classList.remove('hidden');
+          confirmBtn.addEventListener('click', () => { overlay.remove(); callback(isSuccess); });
+        }, 600);
       });
-    }, (spinDuration + 0.4) * 1000 + 200);
+    });
+  }
+
+  // ========================================
+  // ミニゲーム④: サイコロ
+  // ========================================
+  private showDiceRoll(option: EventOption, callback: (success: boolean) => void) {
+    const thresholds: Record<string, number> = { low: 5, medium: 7, high: 10 };
+    const crewBonus = getCrewEventBonus(this.state);
+    const threshold = Math.max(2, Math.round((thresholds[option.risk] ?? 7) - crewBonus * 6));
+
+    const die1 = Math.floor(Math.random() * 6) + 1;
+    const die2 = Math.floor(Math.random() * 6) + 1;
+    const total = die1 + die2;
+    const success = total >= threshold;
+
+    const diceFaces = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">🎲 サイコロ</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">2d6 で ${threshold} 以上を出せ！</div>
+      <div class="dice-roll-area">
+        <div class="dice-box" id="dice1">🎲</div>
+        <span class="dice-plus">+</span>
+        <div class="dice-box" id="dice2">🎲</div>
+        <span class="dice-eq">=</span>
+        <div class="dice-total" id="dice-total">?</div>
+      </div>
+      <div class="dice-threshold">目標: ${threshold} 以上</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 目標値-${Math.abs(Math.round(crewBonus * 6))}</div>` : ''}
+      <button class="mg-roll-btn" id="dice-roll-btn">🎲 サイコロを振る！</button>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    document.getElementById('dice-roll-btn')?.addEventListener('click', () => {
+      const rollBtn = document.getElementById('dice-roll-btn') as HTMLButtonElement;
+      if (rollBtn) { rollBtn.disabled = true; rollBtn.textContent = '振り中...'; }
+
+      const dice1El = document.getElementById('dice1');
+      const dice2El = document.getElementById('dice2');
+      const totalEl = document.getElementById('dice-total');
+
+      // サイコロがランダムに回るアニメーション
+      let ticks = 0;
+      const faces = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+      const rollInterval = setInterval(() => {
+        if (dice1El) dice1El.textContent = faces[Math.floor(Math.random() * 6)];
+        if (dice2El) dice2El.textContent = faces[Math.floor(Math.random() * 6)];
+        ticks++;
+        if (ticks >= 12) {
+          clearInterval(rollInterval);
+          if (dice1El) dice1El.textContent = diceFaces[die1];
+          if (dice2El) dice2El.textContent = diceFaces[die2];
+          if (totalEl) {
+            totalEl.textContent = String(total);
+            totalEl.className = `dice-total ${success ? 'pos' : 'neg'}`;
+          }
+
+          setTimeout(() => {
+            const resultEl = document.getElementById('mg-result');
+            const confirmBtn = document.getElementById('mg-confirm');
+            if (!resultEl || !confirmBtn) return;
+            if (success) {
+              audioManager.playSE('roulette-success');
+              resultEl.innerHTML = `<div class="mg-success">✅ ${total} ≥ ${threshold} 成功！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+            } else {
+              audioManager.playSE('roulette-fail');
+              resultEl.innerHTML = `<div class="mg-failure">❌ ${total} < ${threshold} 失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+            }
+            confirmBtn.classList.remove('hidden');
+            confirmBtn.addEventListener('click', () => { overlay.remove(); callback(success); });
+          }, 500);
+        }
+      }, 80);
+    });
   }
 
   private describeEffect(eff: EventEffect): string {

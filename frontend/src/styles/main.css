@@ -2379,6 +2379,258 @@ body::after {
 
 
 /* ========================================
+   ミニゲーム共通スタイル
+   ======================================== */
+.minigame-overlay {
+  position: fixed; inset: 0; z-index: 9500;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.9);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(0,0,0,0.5) 0px, rgba(0,0,0,0.5) 2px,
+    transparent 2px, transparent 4px
+  );
+  animation: pixelFadeIn 0.1s steps(2);
+}
+.minigame-modal {
+  background: var(--px-panel);
+  border: 4px solid var(--px-cyan);
+  box-shadow: 6px 6px 0 var(--px-cyan-dim), 12px 12px 0 rgba(0,0,0,0.8);
+  padding: 20px 24px;
+  min-width: 300px; max-width: 420px; width: 92vw;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  animation: pixelModalIn 0.15s steps(3);
+}
+.mg-header {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; justify-content: center;
+}
+.mg-type-badge {
+  font-size: 8px; color: var(--px-cyan);
+  background: rgba(0,229,255,0.1);
+  border: 2px solid var(--px-cyan);
+  box-shadow: 2px 2px 0 var(--px-cyan-dim);
+  padding: 3px 8px;
+}
+.mg-option-label {
+  font-size: 8px; color: var(--px-text);
+  text-align: center; line-height: 1.8;
+  background: var(--px-dark);
+  border: 2px solid var(--px-border);
+  box-shadow: 2px 2px 0 #000;
+  padding: 5px 10px; width: 100%;
+}
+.mg-instruction {
+  font-size: 7px; color: var(--px-gold);
+  text-shadow: 1px 1px 0 var(--px-gold-dim);
+  letter-spacing: 1px;
+  animation: pixelBlink 1s steps(1) infinite;
+}
+.mg-rates {
+  display: flex; align-items: center; gap: 8px; font-size: 7px;
+}
+.rate-sep { color: var(--px-text3); }
+.mg-crew-bonus { font-size: 6px; padding: 1px 5px; border: 1px solid currentColor; }
+.mg-crew-bonus.pos { color: var(--px-green); }
+.mg-crew-bonus.neg { color: var(--px-red); }
+.mg-crew-bonus-row {
+  font-size: 6px; padding: 2px 8px;
+  border: 2px solid currentColor;
+  box-shadow: 1px 1px 0 #000;
+}
+.mg-crew-bonus-row.pos { color: var(--px-green); background: rgba(0,255,136,0.08); }
+.mg-crew-bonus-row.neg { color: var(--px-red);   background: rgba(255,51,85,0.08); }
+.mg-result { min-height: 48px; width: 100%; text-align: center; }
+.mg-success {
+  font-size: 9px; color: var(--px-green);
+  background: rgba(0,255,136,0.08);
+  border: 2px solid var(--px-green);
+  box-shadow: 2px 2px 0 var(--px-green-dim);
+  padding: 8px 12px; line-height: 2;
+  animation: chipPixelPop 0.2s steps(3);
+}
+.mg-failure {
+  font-size: 9px; color: var(--px-red);
+  background: rgba(255,51,85,0.08);
+  border: 2px solid var(--px-red);
+  box-shadow: 2px 2px 0 var(--px-red-dim);
+  padding: 8px 12px; line-height: 2;
+  animation: chipPixelPop 0.2s steps(3);
+}
+.mg-effect {
+  display: block; font-size: 7px; color: var(--px-text2);
+  margin-top: 3px;
+}
+.mg-confirm-btn {
+  font-family: var(--font-pixel);
+  background: var(--px-cyan); color: var(--px-black);
+  border: none; padding: 9px 26px;
+  font-size: 8px;
+  box-shadow: 0 4px 0 var(--px-cyan-dim), 0 5px 0 #000;
+  cursor: pointer;
+}
+.mg-confirm-btn:hover  { background: #33eeff; }
+.mg-confirm-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--px-cyan-dim); }
+
+/* ルーレットv2 */
+.roulette-modal-v2 { }
+.rv2-wheel-wrap {
+  position: relative; width: 180px; height: 180px;
+  margin: 4px auto;
+}
+.rv2-pointer {
+  position: absolute; top: -4px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px; color: var(--px-yellow);
+  z-index: 5; filter: drop-shadow(0 0 4px var(--px-yellow));
+}
+.rv2-disc {
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.2);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.15), 4px 4px 0 rgba(0,0,0,0.5);
+  margin: 14px auto 0;
+  position: relative;
+  transition: transform 3s cubic-bezier(0.15, 0.7, 0.1, 1);
+}
+.rv2-disc-inner {
+  position: absolute; inset: 20%;
+  border-radius: 50%;
+  background: rgba(10,10,20,0.7);
+  border: 2px solid rgba(255,255,255,0.08);
+}
+.rv2-disc-label {
+  position: absolute; top: 50%; left: 50%;
+  font-size: 7px; color: rgba(255,255,255,0.9);
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+  white-space: nowrap; text-align: center;
+  line-height: 1.5; font-family: var(--font-pixel);
+}
+.rv2-disc-label.fail-label { color: rgba(255,200,200,0.9); }
+
+/* ゲージ止め */
+.gauge-bar-wrap { width: 100%; padding: 4px 0; }
+.gauge-bar {
+  position: relative; height: 32px;
+  background: var(--px-dark);
+  border: 3px solid var(--px-border);
+  box-shadow: 3px 3px 0 #000;
+  overflow: hidden;
+}
+.gauge-success-zone {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(0,255,136,0.3);
+  border-left: 2px solid var(--px-green);
+  border-right: 2px solid var(--px-green);
+  display: flex; align-items: center; justify-content: center;
+}
+.gauge-zone-label {
+  font-size: 5px; color: var(--px-green);
+  text-shadow: 1px 1px 0 var(--px-green-dim);
+  white-space: nowrap; font-family: var(--font-pixel);
+}
+.gauge-cursor {
+  position: absolute; top: 0; bottom: 0;
+  width: 4px; background: var(--px-yellow);
+  box-shadow: 0 0 6px var(--px-yellow);
+  left: 0;
+}
+.gauge-cursor-success { background: var(--px-green) !important; box-shadow: 0 0 8px var(--px-green) !important; }
+.gauge-cursor-fail    { background: var(--px-red)   !important; box-shadow: 0 0 8px var(--px-red)   !important; }
+.mg-stop-btn {
+  font-family: var(--font-pixel);
+  background: var(--px-red); color: #fff;
+  border: none; padding: 10px 28px;
+  font-size: 10px;
+  box-shadow: 0 5px 0 var(--px-red-dim), 0 6px 0 #000;
+  cursor: pointer; letter-spacing: 2px;
+  animation: pixelBlink 0.5s steps(1) infinite;
+}
+.mg-stop-btn:hover   { background: #ff5577; }
+.mg-stop-btn:active  { transform: translateY(4px); box-shadow: 0 1px 0 var(--px-red-dim); }
+.mg-stop-btn:disabled { opacity: 0.6; animation: none; cursor: not-allowed; }
+.mg-roll-btn {
+  font-family: var(--font-pixel);
+  background: var(--px-gold); color: var(--px-black);
+  border: none; padding: 10px 24px;
+  font-size: 9px;
+  box-shadow: 0 5px 0 var(--px-gold-dim), 0 6px 0 #000;
+  cursor: pointer;
+}
+.mg-roll-btn:hover   { background: #ffdd22; }
+.mg-roll-btn:active  { transform: translateY(4px); box-shadow: 0 1px 0 var(--px-gold-dim); }
+.mg-roll-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* カード引き */
+.draw-cards-row {
+  display: flex; gap: 8px; justify-content: center;
+  flex-wrap: wrap; padding: 4px 0;
+}
+.draw-card {
+  width: 52px; height: 72px;
+  cursor: pointer;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.4s steps(4);
+  transform: rotateY(0deg);
+}
+.draw-card:hover:not(.flipped) { transform: translateY(-4px) rotateY(0deg); }
+.draw-card.flipped { transform: rotateY(180deg); pointer-events: none; }
+.draw-card.revealed { transform: rotateY(180deg); opacity: 0.5; }
+.draw-card-face {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid var(--px-border);
+  box-shadow: 3px 3px 0 #000;
+  font-size: 24px;
+  backface-visibility: hidden;
+}
+.draw-card-face.front {
+  background: var(--px-card);
+  color: var(--px-cyan);
+  font-size: 28px;
+  border-color: var(--px-cyan);
+}
+.draw-card-face.back {
+  background: var(--px-dark);
+  transform: rotateY(180deg);
+  border-color: var(--px-border);
+  font-size: 28px;
+}
+
+/* サイコロ */
+.dice-roll-area {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0;
+}
+.dice-box {
+  font-size: 36px;
+  background: var(--px-dark);
+  border: 3px solid var(--px-border);
+  box-shadow: 3px 3px 0 #000;
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  animation: diceShake 0.1s steps(2) infinite;
+}
+.dice-box.rolling { animation: diceShake 0.08s steps(2) infinite; }
+@keyframes diceShake {
+  0%, 100% { transform: rotate(-3deg); }
+  50%       { transform: rotate(3deg); }
+}
+.dice-plus, .dice-eq { font-size: 14px; color: var(--px-text3); font-family: var(--font-pixel); }
+.dice-total {
+  font-size: 24px; color: var(--px-text);
+  text-shadow: 2px 2px 0 #000;
+  min-width: 40px; text-align: center;
+  font-family: var(--font-pixel);
+}
+.dice-total.pos { color: var(--px-green); text-shadow: 2px 2px 0 var(--px-green-dim); }
+.dice-total.neg { color: var(--px-red);   text-shadow: 2px 2px 0 var(--px-red-dim); }
+.dice-threshold {
+  font-size: 7px; color: var(--px-text3); letter-spacing: 1px;
+}
+
+/* ========================================
    ユーティリティ
    ======================================== */
 .hidden     { display: none !important; }
