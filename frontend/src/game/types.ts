@@ -230,6 +230,16 @@ export interface MonthResult {
   cardBonusDelta: number;     // 航海カードによる追加損益
   fatefulWasLucky?: boolean;  // 運命の一網の結果
   effectiveWeather: Weather;  // カード適用後の実効天候
+  yieldBreakdown?: {          // 水揚げ補正の内訳
+    weather: number;          // 天候補正
+    event: number;            // イベント補正
+    learning: number;         // 学びボーナス
+    crew: number;             // クルーボーナス（専門家込み）
+    upgrade: number;          // アップグレード
+    card: number;             // 航海カード
+    noise: number;            // ランダム変動
+  };
+  eventDetails?: Array<{ title: string; option: string; yieldMult?: number; moneyDelta?: number }>; // イベント詳細
 }
 
 // ========================================

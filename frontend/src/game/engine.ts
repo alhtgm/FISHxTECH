@@ -753,6 +753,15 @@ function calculateMonthResult(state: GameState): MonthResult {
   const cardBonusDelta = cardFixedBonus + gamblerBonus;
   const profit = totalRevenue - fuelCost - fixedCost - crewSalaryCost + eventCostDelta - interestCost + cardBonusDelta;
 
+  const eventDetails = state.scheduledEvents
+    .filter(ev => ev.resolved && ev.chosenOption)
+    .map(ev => ({
+      title: ev.template.title,
+      option: ev.chosenOption!.label,
+      yieldMult: ev.chosenOption!.effect.yieldMultiplier,
+      moneyDelta: ev.chosenOption!.effect.moneyDelta,
+    }));
+
   return {
     isResting: false,
     area: area.name,
@@ -771,6 +780,16 @@ function calculateMonthResult(state: GameState): MonthResult {
     cardBonusDelta,
     fatefulWasLucky: cardFx.fatefulWasLucky,
     effectiveWeather,
+    yieldBreakdown: {
+      weather: weatherMultiplier,
+      event: eventYieldMultiplier,
+      learning: learningYieldBonus,
+      crew: crewYieldMult * specialBonus,
+      upgrade: (1 + upgradeYieldBonus) * upgradeMethodMult,
+      card: cardFx.allYieldMult * cardMethodMult * cardAreaMult * extraCrewBonus,
+      noise: yieldNoise,
+    },
+    eventDetails,
   };
 }
 

@@ -1030,17 +1030,13 @@ export class App {
       </div>`;
     }).join('');
 
-    const eventLogs = r.events.filter(e => e.resolved && e.chosenOption).map(e =>
-      `<div style="font-size:0.72rem;color:var(--accent-yellow);margin-bottom:2px">📅 ${e.day}日：${e.template.title} → ${e.chosenOption!.label}</div>`
-    ).join('');
-
     return `
     <div class="panel-header">${this.state.month}月 操業結果</div>
     <div class="panel-body">
       <div class="result-view">
         ${r.isResting ? `
         <div style="text-align:center;padding:24px;color:var(--accent-gold)">
-          <div style="font-size:3rem;animation:bannerPop 0.5s cubic-bezier(0.34,1.56,0.64,1)">🏠</div>
+          <div style="font-size:3rem;animation:pixelBannerIn 0.2s steps(3)">🏠</div>
           <div style="font-size:1.1rem;font-weight:700;margin-top:10px">今月は休業</div>
           <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px">副業収入: ¥${GAME_CONFIG.restIncome.toLocaleString()}</div>
         </div>` : `
@@ -1084,22 +1080,119 @@ export class App {
             </div>
           </div>` : ''}
         </div>
-        <div class="profit-formula">
-          ${[
-            `売上 ¥${r.totalRevenue.toLocaleString()}`,
-            `燃料 -¥${r.fuelCost.toLocaleString()}`,
-            `固定 -¥${r.fixedCost.toLocaleString()}`,
-            r.crewSalaryCost > 0 ? `人件費 -¥${r.crewSalaryCost.toLocaleString()}` : '',
-            r.interestCost > 0 ? `利息 -¥${r.interestCost.toLocaleString()}` : '',
-            r.eventCostDelta !== 0 ? `イベント ${r.eventCostDelta >= 0 ? '+' : ''}¥${r.eventCostDelta.toLocaleString()}` : '',
-            r.cardBonusDelta !== 0 ? `カード ${r.cardBonusDelta >= 0 ? '+' : ''}¥${r.cardBonusDelta.toLocaleString()}` : '',
-          ].filter(Boolean).join(' <span class="formula-sep">→</span> ')}
-          <span class="formula-sep">=</span>
-          <span class="${r.profit >= 0 ? 'text-green' : 'text-red'}" style="font-weight:700">
-            ${r.profit >= 0 ? '+' : ''}¥${r.profit.toLocaleString()}
-          </span>
+        <div class="profit-formula-detail">
+          <div class="formula-section-title">▶ 収益計算式</div>
+
+          ${r.yieldBreakdown ? (() => {
+            const factors = [
+              { label: '天候', val: r.yieldBreakdown!.weather,   icon: r.weather === 'sunny' ? '☀️' : r.weather === 'cloudy' ? '☁️' : '⛈️' },
+              { label: 'イベント', val: r.yieldBreakdown!.event,  icon: '📅' },
+              { label: '学び',  val: r.yieldBreakdown!.learning,  icon: '📚' },
+              { label: 'クルー',  val: r.yieldBreakdown!.crew,    icon: '👥' },
+              { label: 'UP',    val: r.yieldBreakdown!.upgrade,   icon: '⚙️' },
+              { label: 'カード', val: r.yieldBreakdown!.card,     icon: '🃏' },
+              { label: 'ノイズ', val: r.yieldBreakdown!.noise,    icon: '🎲' },
+            ].filter(f => Math.abs(f.val - 1.0) > 0.005);
+
+            const terms = factors.map(f => {
+              const cls = f.val >= 1 ? 'pos' : 'neg';
+              const pct = `${f.val >= 1 ? '+' : ''}${((f.val - 1) * 100).toFixed(1)}%`;
+              return `<span class="eq-op">×</span>
+              <div class="eq-term ${cls}">
+                <span class="eq-val">${f.val.toFixed(2)}</span>
+                <span class="eq-label">${f.icon}${f.label}<br><span class="eq-pct">${pct}</span></span>
+              </div>`;
+            }).join('');
+
+            return `
+            <div class="formula-block">
+              <div class="formula-block-title">水揚げ補正</div>
+              <div class="eq-chain">
+                <div class="eq-term neutral">
+                  <span class="eq-val">1.00</span>
+                  <span class="eq-label">基準</span>
+                </div>
+                ${terms}
+                <span class="eq-op eq-eq">=</span>
+                <div class="eq-term result ${r.yieldMultiplier >= 1 ? 'pos' : 'neg'}">
+                  <span class="eq-val">${r.yieldMultiplier.toFixed(2)}</span>
+                  <span class="eq-label">合計倍率</span>
+                </div>
+              </div>
+            </div>`;
+          })() : ''}
+
+          ${r.eventDetails && r.eventDetails.length > 0 ? `
+          <div class="formula-block">
+            <div class="formula-block-title">イベント内訳</div>
+            ${r.eventDetails.map(ev => {
+              const hasYield = ev.yieldMult && Math.abs(ev.yieldMult - 1) > 0.005;
+              const hasMoney = ev.moneyDelta && ev.moneyDelta !== 0;
+              const isGood = (ev.yieldMult ?? 1) >= 1 && (ev.moneyDelta ?? 0) >= 0;
+              return `<div class="formula-event-row">
+                <span class="formula-event-icon">${isGood ? '✅' : '⚠️'}</span>
+                <div class="formula-event-body">
+                  <span class="formula-event-title">${ev.title}</span>
+                  <span class="formula-event-choice">→ ${ev.option}</span>
+                </div>
+                <div class="formula-event-effects">
+                  ${hasYield ? `<span class="eq-badge ${(ev.yieldMult ?? 1) >= 1 ? 'pos' : 'neg'}">水揚げ × ${ev.yieldMult!.toFixed(2)}</span>` : ''}
+                  ${hasMoney ? `<span class="eq-badge ${(ev.moneyDelta ?? 0) >= 0 ? 'pos' : 'neg'}">${(ev.moneyDelta ?? 0) >= 0 ? '+' : ''}¥${ev.moneyDelta!.toLocaleString()}</span>` : ''}
+                  ${!hasYield && !hasMoney ? `<span class="eq-badge neutral">効果なし</span>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
+
+          <div class="formula-block">
+            <div class="formula-block-title">利益計算式</div>
+            <div class="eq-chain">
+              <div class="eq-term pos">
+                <span class="eq-val">¥${r.totalRevenue.toLocaleString()}</span>
+                <span class="eq-label">💰売上</span>
+              </div>
+              <span class="eq-op">−</span>
+              <div class="eq-term neg">
+                <span class="eq-val">¥${r.fuelCost.toLocaleString()}</span>
+                <span class="eq-label">⛽燃料</span>
+              </div>
+              <span class="eq-op">−</span>
+              <div class="eq-term neg">
+                <span class="eq-val">¥${r.fixedCost.toLocaleString()}</span>
+                <span class="eq-label">🏢固定費</span>
+              </div>
+              ${r.crewSalaryCost > 0 ? `
+              <span class="eq-op">−</span>
+              <div class="eq-term neg">
+                <span class="eq-val">¥${r.crewSalaryCost.toLocaleString()}</span>
+                <span class="eq-label">👥人件費</span>
+              </div>` : ''}
+              ${r.interestCost > 0 ? `
+              <span class="eq-op">−</span>
+              <div class="eq-term neg">
+                <span class="eq-val">¥${r.interestCost.toLocaleString()}</span>
+                <span class="eq-label">💳利息</span>
+              </div>` : ''}
+              ${r.eventCostDelta !== 0 ? `
+              <span class="eq-op">${r.eventCostDelta >= 0 ? '+' : '−'}</span>
+              <div class="eq-term ${r.eventCostDelta >= 0 ? 'pos' : 'neg'}">
+                <span class="eq-val">¥${Math.abs(r.eventCostDelta).toLocaleString()}</span>
+                <span class="eq-label">📅イベント</span>
+              </div>` : ''}
+              ${r.cardBonusDelta !== 0 ? `
+              <span class="eq-op">${r.cardBonusDelta >= 0 ? '+' : '−'}</span>
+              <div class="eq-term ${r.cardBonusDelta >= 0 ? 'pos' : 'neg'}">
+                <span class="eq-val">¥${Math.abs(r.cardBonusDelta).toLocaleString()}</span>
+                <span class="eq-label">🃏カード</span>
+              </div>` : ''}
+              <span class="eq-op eq-eq">=</span>
+              <div class="eq-term result ${r.profit >= 0 ? 'pos' : 'neg'}">
+                <span class="eq-val">${r.profit >= 0 ? '+' : ''}¥${r.profit.toLocaleString()}</span>
+                <span class="eq-label">最終利益</span>
+              </div>
+            </div>
+          </div>
         </div>
-        ${eventLogs ? `<div class="mb-8">${eventLogs}</div>` : ''}
         `}
         ${this.state.currentChallenge ? `
         <div class="challenge-result-card ${this.state.currentChallenge.completed ? 'success' : 'fail'}">
@@ -1289,49 +1382,80 @@ export class App {
           </div>`;
         }).join('');
 
+    const hasUnlocks = (newAreas.length + newMethods.length) > 0;
+
     return `
-    <div class="panel-header">成長・解放</div>
-    <div class="panel-body">
+    <div class="panel-header">成長・解放 [${this.state.month}月]</div>
+    <div class="panel-body growth-panel-body">
       <div class="growth-view">
-        <div class="growth-title">📊 ${this.state.month}月 まとめ</div>
-        ${prevResult && !prevResult.isResting ? `
-        <div class="info-card">
-          <div class="info-card-label">今月の学び</div>
-          <div style="font-size:0.8rem;margin-top:4px">
-            ${prevResult.weather === 'stormy' && prevResult.profit < 0 ? '⚡ 荒天で苦戦。次回は天候を見極めよう。'
-              : prevResult.profit > 1000000 ? `🎉 大漁！¥${prevResult.profit.toLocaleString()} を稼いだ！素晴らしい判断でした。`
-              : prevResult.profit > 0 ? `✅ 利益 ¥${prevResult.profit.toLocaleString()} を達成！`
-              : '📉 今月は赤字。海域・漁法の組み合わせを見直そう。'}
-          </div>
-        </div>` : ''}
-        ${(newAreas.length + newMethods.length) > 0 ? `
-        <div>
-          <div style="font-size:0.85rem;font-weight:700;color:var(--accent-gold);margin-bottom:6px">🔓 新要素解放！</div>
+
+        ${hasUnlocks ? `
+        <div class="growth-unlock-banner">
+          <div class="growth-unlock-title">★ 新要素解放！</div>
           <div class="unlock-list">
-            ${newAreas.map(id => { const a = FISHING_AREAS.find(a => a.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${a.icon}</span>海域「${a.name}」が解放されました！</div>`; }).join('')}
-            ${newMethods.map(id => { const m = FISHING_METHODS.find(m => m.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${m.icon}</span>漁法「${m.name}」が解放されました！</div>`; }).join('')}
+            ${newAreas.map(id => { const a = FISHING_AREAS.find(a => a.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${a.icon}</span>海域「${a.name}」解放！</div>`; }).join('')}
+            ${newMethods.map(id => { const m = FISHING_METHODS.find(m => m.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${m.icon}</span>漁法「${m.name}」解放！</div>`; }).join('')}
           </div>
         </div>` : ''}
-        <div>
-          <div style="font-size:0.8rem;font-weight:700;margin-bottom:8px">⚡ スキルツリー</div>
+
+        ${prevResult && !prevResult.isResting ? `
+        <div class="growth-summary-bar">
+          <div class="gsummary-item">
+            <span class="gsummary-label">今月利益</span>
+            <span class="gsummary-val ${prevResult.profit >= 0 ? 'pos' : 'neg'}">${prevResult.profit >= 0 ? '+' : ''}¥${prevResult.profit.toLocaleString()}</span>
+          </div>
+          <div class="gsummary-item">
+            <span class="gsummary-label">水揚げ補正</span>
+            <span class="gsummary-val">${prevResult.yieldMultiplier.toFixed(2)}x</span>
+          </div>
+          <div class="gsummary-item">
+            <span class="gsummary-label">現在資金</span>
+            <span class="gsummary-val pos">¥${this.state.money.toLocaleString()}</span>
+          </div>
+        </div>` : ''}
+
+        <div class="growth-tabs">
+          <button class="growth-tab active" data-tab="skill">⚡ スキル</button>
+          <button class="growth-tab" data-tab="crew">👥 クルー(${crew.length})</button>
+          <button class="growth-tab" data-tab="recruit">📋 採用(${applicants.length})</button>
+        </div>
+
+        <div class="growth-tab-content" id="growth-tab-skill">
           <div class="skill-tree-container">${skillTreeHtml}</div>
         </div>
-        <div>
-          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">👨‍✈️ 雇用済みクルー（${crew.length}名）</div>
-          <div class="crew-manage-grid">${hiredCrewHtml}</div>
+
+        <div class="growth-tab-content hidden" id="growth-tab-crew">
+          ${crew.length === 0
+            ? '<div class="growth-empty">クルーがいません</div>'
+            : `<div class="crew-manage-grid">${hiredCrewHtml}</div>`
+          }
         </div>
-        <div>
-          <div style="font-size:0.8rem;font-weight:700;margin:10px 0 6px">📋 今月の応募者</div>
-          <div class="crew-manage-grid">${applicantsHtml}</div>
+
+        <div class="growth-tab-content hidden" id="growth-tab-recruit">
+          ${applicants.length === 0
+            ? '<div class="growth-empty">今月の応募者はいません</div>'
+            : `<div class="crew-manage-grid">${applicantsHtml}</div>`
+          }
         </div>
-        <button id="next-month-btn" class="next-btn">
-          ${this.state.month >= 12 ? '🏁 ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
+
+        <button id="next-month-btn" class="next-btn growth-next-btn">
+          ${this.state.month >= 12 ? '★ ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
         </button>
       </div>
     </div>`;
   }
 
   private bindGrowth() {
+    // タブ切替
+    document.querySelectorAll('.growth-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabKey = (tab as HTMLElement).dataset.tab!;
+        document.querySelectorAll('.growth-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.growth-tab-content').forEach(c => c.classList.add('hidden'));
+        tab.classList.add('active');
+        document.getElementById(`growth-tab-${tabKey}`)?.classList.remove('hidden');
+      });
+    });
     // スキルツリー購入
     document.querySelectorAll('[data-upgrade]').forEach(btn => {
       btn.addEventListener('click', () => {
