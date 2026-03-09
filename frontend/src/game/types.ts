@@ -132,16 +132,18 @@ export interface Upgrade {
   purchased: boolean;
   unlockLevel: number;
   requires?: string[];                                                       // 前提アップグレードID
-  category: 'info' | 'efficiency' | 'yield' | 'diving' | 'market';         // カテゴリ
+  category: 'info' | 'efficiency' | 'yield' | 'diving' | 'market' | 'boat' | 'safety'; // カテゴリ
 }
 
 export interface UpgradeEffect {
   priceVarianceReduction?: number;        // 価格ブレ軽減
   fuelCostReduction?: number;             // 燃料費削減率
+  fixedCostReduction?: number;            // 固定費削減率
   yieldBonus?: number;                    // 水揚げ量UP
   reputationBonus?: number;               // 評価UP
   methodYieldMultiplier?: { methodId: string; mult: number };  // 特定漁法の水揚げ倍率
   fishPriceBonus?: { fishIds: string[]; mult: number };        // 特定魚種の価格ボーナス
+  allPriceMultiplier?: number;            // 全魚種価格倍率
 }
 
 // ========================================
@@ -155,7 +157,7 @@ export interface EventTemplate {
   applicableMethods?: string[];
   options: EventOption[];
   isQuick?: boolean;
-  mechanic?: 'roulette' | 'gauge' | 'card' | 'dice'; // ミニゲーム種類（未指定=roulette）
+  mechanic?: 'reaction' | 'gauge' | 'card' | 'dice' | 'mash' | 'guess' | 'memory' | 'order'; // ミニゲーム種類
 }
 
 export interface EventOption {

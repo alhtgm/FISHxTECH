@@ -424,7 +424,6 @@ export class App {
         ${this.renderLeftPanel()}
         <div id="center-panel" class="panel">${this.renderCenterPanel()}</div>
         ${this.renderRightPanel()}
-        ${this.renderLogPanel()}
       </div>
       <div class="version-label">v1.0.0</div>
     </div>`;
@@ -1290,6 +1289,8 @@ export class App {
       { key: 'efficiency', label: '効率化', icon: '⚙️' },
       { key: 'yield', label: '収益強化', icon: '📈' },
       { key: 'market', label: '市場', icon: '🏪' },
+      { key: 'boat', label: '船舶', icon: '🚢' },
+      { key: 'safety', label: '安全', icon: '🛡️' },
       { key: 'diving', label: '素潜り', icon: '🤿' },
     ];
     const skillTreeHtml = categories.map(cat => {
@@ -1445,6 +1446,19 @@ export class App {
     </div>`;
   }
 
+  // タブを保持したままGROWH画面を再描画するヘルパー
+  private refreshGrowthPanel() {
+    const activeTabEl = document.querySelector('.growth-tab.active') as HTMLElement | null;
+    const activeTab = activeTabEl?.dataset.tab ?? 'skill';
+    this.refreshCenterPanel();
+    // タブ状態を復元
+    document.querySelectorAll('.growth-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.growth-tab-content').forEach(c => (c as HTMLElement).classList.add('hidden'));
+    const tab = document.querySelector(`.growth-tab[data-tab="${activeTab}"]`);
+    tab?.classList.add('active');
+    document.getElementById(`growth-tab-${activeTab}`)?.classList.remove('hidden');
+  }
+
   private bindGrowth() {
     // タブ切替
     document.querySelectorAll('.growth-tab').forEach(tab => {
@@ -1462,8 +1476,7 @@ export class App {
         const upgradeId = (btn as HTMLElement).dataset.upgrade!;
         audioManager.playSE('coin');
         this.state = purchaseUpgrade(this.state, upgradeId);
-        // 再描画（スキルツリー全体を更新）
-        this.refreshCenterPanel();
+        this.refreshGrowthPanel();
         this.updateMoneyDisplay();
       });
     });
@@ -1473,7 +1486,7 @@ export class App {
         const crewId = (btn as HTMLElement).dataset.hireApplicant!;
         audioManager.playSE('coin');
         this.state = hireApplicant(this.state, crewId);
-        this.refreshCenterPanel();
+        this.refreshGrowthPanel();
         this.updateMoneyDisplay();
       });
     });
@@ -1483,7 +1496,7 @@ export class App {
         const crewId = (btn as HTMLElement).dataset.fireCrew!;
         audioManager.playSE('click');
         this.state = fireCrew(this.state, crewId);
-        this.refreshCenterPanel();
+        this.refreshGrowthPanel();
         this.updateMoneyDisplay();
       });
     });
@@ -1493,7 +1506,7 @@ export class App {
         const crewId = (btn as HTMLElement).dataset.upgradeCrew!;
         audioManager.playSE('coin');
         this.state = upgradeCrew(this.state, crewId);
-        this.refreshCenterPanel();
+        this.refreshGrowthPanel();
         this.updateMoneyDisplay();
       });
     });
@@ -1507,21 +1520,6 @@ export class App {
         return startMonth(next);
       });
     });
-  }
-
-  // ---- ログパネル ----
-  private renderLogPanel(): string {
-    const entries = [...this.state.log].reverse().slice(0, 30);
-    return `
-    <div id="log-panel" class="panel">
-      <div class="panel-header">ログ</div>
-      <div class="panel-body">
-        ${entries.map(e => `
-        <div class="log-entry ${e.type}">
-          <span class="log-time">${e.month}月${e.day ? e.day + '日' : ''}</span>${e.text}
-        </div>`).join('') || '<div class="log-entry system">ゲーム開始</div>'}
-      </div>
-    </div>`;
   }
 
   // ========================================
@@ -1719,8 +1717,15 @@ export class App {
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return '';
 
-    const isQuick = event.template.isQuick ?? false;
-    const dayLabel = isQuick ? `⚡ ${event.day}日目 — 判断タイム！` : `📅 ${event.day}日目のイベント`;
+    const allMechanics = ['reaction', 'gauge', 'card', 'dice', 'mash', 'guess', 'memory', 'order'];
+    const mechanic = allMechanics[Math.floor(Math.random() * allMechanics.length)];
+    const mechanicLabels: Record<string, string> = {
+      reaction: '⚡ 反応ゲーム', gauge: '⏱️ ゲージ止め',
+      card: '🂠 カード引き', dice: '🎲 サイコロ',
+      mash: '👊 連打', guess: '🎁 宝箱当て',
+      memory: '🧠 記憶ゲーム', order: '🔢 順番タップ',
+    };
+    const dayLabel = `📅 ${event.day}日目のイベント — ${mechanicLabels[mechanic] ?? '?'}`;
 
     const optionsHtml = event.template.options.map((opt, i) => `
       <button class="event-option-btn" data-option="${i}">
@@ -1733,7 +1738,7 @@ export class App {
 
     return `
     <div class="modal-overlay">
-      <div class="event-modal">
+      <div class="event-modal" data-mechanic="${mechanic}">
         <div class="event-modal-day">${dayLabel}</div>
         <div class="event-modal-title">${event.template.title}</div>
         <div class="event-modal-body">${event.template.description}</div>
@@ -1747,7 +1752,9 @@ export class App {
     const event = this.state.scheduledEvents[eventIdx];
     if (!event) return;
 
-    const mechanic = event.template.mechanic ?? 'roulette';
+    // renderEventModal で決定したミニゲーム種類を読み取る
+    const modalEl = document.querySelector('.event-modal') as HTMLElement | null;
+    const mechanic = (modalEl?.dataset.mechanic ?? 'card') as 'reaction' | 'gauge' | 'card' | 'dice' | 'mash' | 'guess' | 'memory' | 'order';
 
     document.querySelectorAll('.event-option-btn').forEach((btn, i) => {
       btn.addEventListener('click', () => {
@@ -1756,99 +1763,123 @@ export class App {
           this.setState(s => resolveEvent(s, option, success));
         };
         switch (mechanic) {
-          case 'gauge': this.showGaugeStop(option, callback); break;
-          case 'card':  this.showCardDraw(option, callback);  break;
-          case 'dice':  this.showDiceRoll(option, callback);  break;
-          default:      this.showRoulette(option, callback);  break;
+          case 'gauge':    this.showGaugeStop(option, callback);    break;
+          case 'card':     this.showCardDraw(option, callback);     break;
+          case 'dice':     this.showDiceRoll(option, callback);     break;
+          case 'mash':     this.showMashGame(option, callback);     break;
+          case 'guess':    this.showGuessGame(option, callback);    break;
+          case 'memory':   this.showMemoryGame(option, callback);   break;
+          case 'order':    this.showOrderGame(option, callback);    break;
+          default:         this.showReactionGame(option, callback); break;
         }
       });
     });
   }
 
   // ========================================
-  // ミニゲーム①: ルーレット（シンプル円盤）
+  // ミニゲーム①: 反応ゲーム（GO信号に反応）
   // ========================================
-  private showRoulette(option: EventOption, callback: (success: boolean) => void) {
-    const successRates: Record<string, number> = { low: 0.70, medium: 0.50, high: 0.10 };
-    const baseRate = successRates[option.risk] ?? 0.5;
+  private showReactionGame(option: EventOption, callback: (success: boolean) => void) {
+    const thresholds: Record<string, number> = { low: 1200, medium: 800, high: 450 };
     const crewBonus = getCrewEventBonus(this.state);
-    const rate = Math.min(0.95, Math.max(0.05, baseRate + crewBonus));
-    const success = Math.random() < rate;
-
-    const greenPct = Math.round(rate * 100);
-    const greenDeg = rate * 360;
-
-    const spins = 5 + Math.floor(Math.random() * 3);
-    const targetAngle = success
-      ? (Math.random() * greenDeg * 0.85 + greenDeg * 0.075)
-      : (greenDeg + Math.random() * (360 - greenDeg) * 0.85 + (360 - greenDeg) * 0.075);
-    const finalAngle = spins * 360 + targetAngle;
-    const duration = 3.0 + Math.random() * 0.5;
+    const baseThreshold = thresholds[option.risk] ?? 800;
+    const threshold = Math.min(2000, Math.max(200, baseThreshold + crewBonus * 400));
+    const waitMin = 1500;
+    const waitMax = 4000;
+    const waitDelay = waitMin + Math.random() * (waitMax - waitMin);
 
     const overlay = document.createElement('div');
     overlay.className = 'minigame-overlay';
     overlay.innerHTML = `
-    <div class="minigame-modal roulette-modal-v2">
+    <div class="minigame-modal">
       <div class="mg-header">
-        <span class="mg-type-badge">🎡 ルーレット</span>
+        <span class="mg-type-badge">⚡ 反応ゲーム</span>
         <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
       </div>
       <div class="mg-option-label">${option.label}</div>
-      <div class="mg-rates">
-        <span class="rate-success">成功 ${greenPct}%</span>
-        <span class="rate-sep">/</span>
-        <span class="rate-fail">失敗 ${100 - greenPct}%</span>
-        ${crewBonus !== 0 ? `<span class="mg-crew-bonus ${crewBonus > 0 ? 'pos' : 'neg'}">クルー${crewBonus > 0 ? '+' : ''}${Math.round(crewBonus * 100)}%</span>` : ''}
-      </div>
-      <div class="rv2-wheel-wrap">
-        <div class="rv2-pointer">▼</div>
-        <div class="rv2-disc" id="rv2-disc"
-          style="background: conic-gradient(var(--px-green) 0deg ${greenDeg}deg, var(--px-red) ${greenDeg}deg 360deg)">
-          <div class="rv2-disc-inner">
-            <span class="rv2-disc-label success-label" style="transform:rotate(${greenDeg / 2}deg) translateY(-52px) rotate(-${greenDeg / 2}deg)">✅<br>${greenPct}%</span>
-            ${100 - greenPct >= 10 ? `<span class="rv2-disc-label fail-label" style="transform:rotate(${greenDeg + (360 - greenDeg) / 2}deg) translateY(-52px) rotate(-${greenDeg + (360 - greenDeg) / 2}deg)">❌<br>${100 - greenPct}%</span>` : ''}
-          </div>
-        </div>
-      </div>
+      <div class="mg-instruction">🟡 が 🟢 に変わったら素早くボタンを押せ！(${threshold}ms以内)</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 猶予+${Math.round(crewBonus * 400)}ms</div>` : ''}
+      <div class="reaction-signal" id="reaction-signal">🟡</div>
+      <div class="reaction-timer" id="reaction-timer"></div>
+      <button class="reaction-btn" id="reaction-btn" disabled>待機中...</button>
       <div class="mg-result" id="mg-result"></div>
       <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
     </div>`;
     document.body.appendChild(overlay);
     audioManager.playSE('event');
 
-    const ticks = [0, 100, 190, 280, 400, 560, 760, 1010, 1320, 1700, 2180];
-    ticks.filter(t => t < duration * 800).forEach(t =>
-      setTimeout(() => audioManager.playSE('roulette-tick'), 300 + t));
+    const signalEl = document.getElementById('reaction-signal');
+    const timerEl = document.getElementById('reaction-timer');
+    const btn = document.getElementById('reaction-btn') as HTMLButtonElement;
+    const resultEl = document.getElementById('mg-result');
+    const confirmBtn = document.getElementById('mg-confirm');
 
-    setTimeout(() => {
-      const disc = document.getElementById('rv2-disc');
-      if (disc) {
-        disc.style.transition = `transform ${duration}s cubic-bezier(0.15, 0.7, 0.1, 1)`;
-        disc.style.transform = `rotate(${finalAngle}deg)`;
-      }
-    }, 300);
+    let goTime = 0;
+    let reacted = false;
+    let earlyPressed = false;
 
-    setTimeout(() => {
-      const resultEl = document.getElementById('mg-result');
-      const confirmBtn = document.getElementById('mg-confirm');
+    const finish = (reactionMs: number | null) => {
+      if (reacted) return;
+      reacted = true;
+      btn.disabled = true;
+      const success = reactionMs !== null && reactionMs <= threshold;
       if (!resultEl || !confirmBtn) return;
+      if (earlyPressed) {
+        audioManager.playSE('roulette-fail');
+        resultEl.innerHTML = `<div class="mg-failure">❌ フライング！早押しは失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+        confirmBtn.classList.remove('hidden');
+        confirmBtn.addEventListener('click', () => { overlay.remove(); callback(false); });
+        return;
+      }
       if (success) {
         audioManager.playSE('roulette-success');
-        resultEl.innerHTML = `<div class="mg-success">✅ 成功！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+        resultEl.innerHTML = `<div class="mg-success">✅ ${reactionMs}ms — 成功！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
       } else {
         audioManager.playSE('roulette-fail');
-        resultEl.innerHTML = `<div class="mg-failure">❌ 失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+        resultEl.innerHTML = `<div class="mg-failure">❌ ${reactionMs ?? '?'}ms — 遅い！(${threshold}ms以内必要)<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
       }
       confirmBtn.classList.remove('hidden');
       confirmBtn.addEventListener('click', () => { overlay.remove(); callback(success); });
-    }, (duration + 0.6) * 1000);
+    };
+
+    btn.addEventListener('click', () => {
+      if (reacted) return;
+      if (goTime === 0) {
+        // フライング
+        earlyPressed = true;
+        reacted = true;
+        if (signalEl) signalEl.textContent = '❌';
+        finish(null);
+        return;
+      }
+      const ms = Date.now() - goTime;
+      if (timerEl) timerEl.textContent = `${ms}ms`;
+      finish(ms);
+    });
+
+    setTimeout(() => {
+      if (reacted) return;
+      if (signalEl) signalEl.textContent = '🟢';
+      signalEl?.classList.add('reaction-go');
+      btn.disabled = false;
+      btn.textContent = '⚡ NOW!';
+      goTime = Date.now();
+
+      // 制限時間を超えたら自動的に失敗
+      setTimeout(() => {
+        if (!reacted) {
+          if (timerEl) timerEl.textContent = `タイムオーバー`;
+          finish(threshold + 999);
+        }
+      }, threshold + 500);
+    }, waitDelay);
   }
 
   // ========================================
   // ミニゲーム②: ゲージ止め
   // ========================================
   private showGaugeStop(option: EventOption, callback: (success: boolean) => void) {
-    const successWidths: Record<string, number> = { low: 48, medium: 30, high: 15 };
+    const successWidths: Record<string, number> = { low: 50, medium: 32, high: 22 };
     const crewBonus = getCrewEventBonus(this.state);
     const baseWidth = successWidths[option.risk] ?? 30;
     const successWidth = Math.min(70, Math.max(8, baseWidth + crewBonus * 100));
@@ -2010,7 +2041,7 @@ export class App {
   // ミニゲーム④: サイコロ
   // ========================================
   private showDiceRoll(option: EventOption, callback: (success: boolean) => void) {
-    const thresholds: Record<string, number> = { low: 5, medium: 7, high: 10 };
+    const thresholds: Record<string, number> = { low: 4, medium: 7, high: 9 };
     const crewBonus = getCrewEventBonus(this.state);
     const threshold = Math.max(2, Math.round((thresholds[option.risk] ?? 7) - crewBonus * 6));
 
@@ -2087,6 +2118,368 @@ export class App {
           }, 500);
         }
       }, 80);
+    });
+  }
+
+  // ========================================
+  // ミニゲーム⑤: 連打ゲーム
+  // ========================================
+  private showMashGame(option: EventOption, callback: (success: boolean) => void) {
+    const requiredClicks: Record<string, number> = { low: 20, medium: 32, high: 45 };
+    const crewBonus = getCrewEventBonus(this.state);
+    const target = Math.max(5, Math.round((requiredClicks[option.risk] ?? 32) - crewBonus * 12));
+    const timeLimit = 2500; // 2.5秒
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">👊 連打ゲーム</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">2.5秒以内に ${target} 回ボタンを押せ！</div>
+      <div class="mash-progress">
+        <div class="mash-count" id="mash-count">0 / ${target}</div>
+        <div class="mash-bar-wrap"><div class="mash-bar" id="mash-bar" style="width:0%"></div></div>
+        <div class="mash-timer" id="mash-timer">⏱ 2.5s</div>
+      </div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 目標-${Math.round(crewBonus * 12)}回</div>` : ''}
+      <button class="mash-btn" id="mash-btn">👊 叩く！</button>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    let clicks = 0;
+    let started = false;
+    let finished = false;
+    let startTime = 0;
+    let rafId: number;
+
+    const mashBtn = document.getElementById('mash-btn') as HTMLButtonElement;
+    const countEl = document.getElementById('mash-count');
+    const barEl = document.getElementById('mash-bar');
+    const timerEl = document.getElementById('mash-timer');
+    const resultEl = document.getElementById('mg-result');
+    const confirmBtn = document.getElementById('mg-confirm');
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      cancelAnimationFrame(rafId);
+      if (mashBtn) { mashBtn.disabled = true; }
+      const success = clicks >= target;
+      if (!resultEl || !confirmBtn) return;
+      if (success) {
+        audioManager.playSE('roulette-success');
+        resultEl.innerHTML = `<div class="mg-success">✅ ${clicks}/${target} 達成！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+      } else {
+        audioManager.playSE('roulette-fail');
+        resultEl.innerHTML = `<div class="mg-failure">❌ ${clicks}/${target} 惜しい...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+      }
+      confirmBtn.classList.remove('hidden');
+      confirmBtn.addEventListener('click', () => { overlay.remove(); callback(success); });
+    };
+
+    const tick = () => {
+      if (finished) return;
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, timeLimit - elapsed);
+      if (timerEl) timerEl.textContent = `⏱ ${(remaining / 1000).toFixed(1)}s`;
+      if (remaining <= 0) { finish(); return; }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    mashBtn?.addEventListener('click', () => {
+      if (finished) return;
+      if (!started) {
+        started = true;
+        startTime = Date.now();
+        rafId = requestAnimationFrame(tick);
+      }
+      clicks++;
+      const pct = Math.min(100, (clicks / target) * 100);
+      if (countEl) countEl.textContent = `${clicks} / ${target}`;
+      if (barEl) barEl.style.width = `${pct}%`;
+      if (clicks >= target) finish();
+    });
+  }
+
+  // ========================================
+  // ミニゲーム⑥: 宝箱当て（シェルゲーム）
+  // ========================================
+  private showGuessGame(option: EventOption, callback: (success: boolean) => void) {
+    const boxCounts: Record<string, number> = { low: 3, medium: 4, high: 5 };
+    const crewBonus = getCrewEventBonus(this.state);
+    const totalBoxes = boxCounts[option.risk] ?? 4;
+    // クルーボーナスで正解箱を増やす（最低1箱）
+    const winBoxes = Math.min(totalBoxes - 1, Math.max(1, Math.round(1 + crewBonus * totalBoxes)));
+    const winSet = new Set<number>();
+    while (winSet.size < winBoxes) winSet.add(Math.floor(Math.random() * totalBoxes));
+
+    const boxEmojis = ['🎁', '📦', '🧰', '💼', '🎒'];
+    const boxHtml = Array.from({ length: totalBoxes }, (_, i) =>
+      `<button class="guess-box" data-box="${i}" title="箱${i + 1}">${boxEmojis[i % boxEmojis.length]}</button>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">🎁 宝箱当て</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">${winBoxes}/${totalBoxes} 箱に魚が入っている。1箱選べ！</div>
+      <div class="guess-boxes-row">${boxHtml}</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 当たり+${Math.round(crewBonus * totalBoxes)}箱分</div>` : ''}
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    overlay.querySelectorAll('.guess-box').forEach(box => {
+      box.addEventListener('click', () => {
+        if (overlay.querySelector('.guess-box.opened')) return;
+        const idx = parseInt((box as HTMLElement).dataset.box ?? '0');
+        const isWin = winSet.has(idx);
+
+        // 全箱を開ける
+        overlay.querySelectorAll('.guess-box').forEach((b, bi) => {
+          (b as HTMLButtonElement).disabled = true;
+          b.textContent = winSet.has(bi) ? '🐟' : '💀';
+          b.classList.add('opened', winSet.has(bi) ? 'opened-win' : 'opened-lose');
+        });
+        (box as HTMLElement).classList.add('opened-picked');
+
+        const resultEl = document.getElementById('mg-result');
+        const confirmBtn = document.getElementById('mg-confirm');
+        if (!resultEl || !confirmBtn) return;
+        setTimeout(() => {
+          if (isWin) {
+            audioManager.playSE('roulette-success');
+            resultEl.innerHTML = `<div class="mg-success">✅ 当たり！🐟 魚がいた！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+          } else {
+            audioManager.playSE('roulette-fail');
+            resultEl.innerHTML = `<div class="mg-failure">❌ 外れ...💀<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+          }
+          confirmBtn.classList.remove('hidden');
+          confirmBtn.addEventListener('click', () => { overlay.remove(); callback(isWin); });
+        }, 400);
+      });
+    });
+  }
+
+  // ========================================
+  // ミニゲーム⑦: 記憶ゲーム（光ったマスを覚えて再現）
+  // ========================================
+  private showMemoryGame(option: EventOption, callback: (success: boolean) => void) {
+    const seqLengths: Record<string, number> = { low: 3, medium: 5, high: 7 };
+    const crewBonus = getCrewEventBonus(this.state);
+    const seqLen = Math.max(2, Math.round((seqLengths[option.risk] ?? 5) - crewBonus * 2));
+    const gridSize = 9; // 3x3
+
+    const sequence: number[] = [];
+    while (sequence.length < seqLen) {
+      const n = Math.floor(Math.random() * gridSize);
+      if (!sequence.includes(n)) sequence.push(n);
+    }
+
+    const cellsHtml = Array.from({ length: gridSize }, (_, i) =>
+      `<button class="memory-cell" id="mc-${i}" data-idx="${i}"></button>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">🧠 記憶ゲーム</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction" id="mem-instruction">光ったマスを覚えろ！</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 覚える数-${Math.round(crewBonus * 2)}</div>` : ''}
+      <div class="memory-grid">${cellsHtml}</div>
+      <div class="memory-progress" id="mem-progress"></div>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    const instructionEl = document.getElementById('mem-instruction');
+    const progressEl = document.getElementById('mem-progress');
+    const resultEl = document.getElementById('mg-result');
+    const confirmBtn = document.getElementById('mg-confirm');
+
+    let phase: 'show' | 'input' = 'show';
+    let inputSeq: number[] = [];
+
+    const getCell = (i: number) => document.getElementById(`mc-${i}`);
+
+    // Show sequence
+    const showSequence = async () => {
+      for (let i = 0; i < seqLen; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        const cell = getCell(sequence[i]);
+        if (cell) { cell.classList.add('memory-lit'); }
+        await new Promise(r => setTimeout(r, 500));
+        if (cell) { cell.classList.remove('memory-lit'); }
+      }
+      await new Promise(r => setTimeout(r, 300));
+      phase = 'input';
+      if (instructionEl) instructionEl.textContent = `覚えた順に ${seqLen} マスを押せ！`;
+      if (progressEl) progressEl.textContent = `0 / ${seqLen}`;
+      overlay.querySelectorAll('.memory-cell').forEach(c => (c as HTMLButtonElement).disabled = false);
+    };
+
+    overlay.querySelectorAll('.memory-cell').forEach(cell => {
+      (cell as HTMLButtonElement).disabled = true;
+      cell.addEventListener('click', () => {
+        if (phase !== 'input') return;
+        const idx = parseInt((cell as HTMLElement).dataset.idx ?? '0');
+        inputSeq.push(idx);
+        const pos = inputSeq.length - 1;
+        const correct = sequence[pos] === idx;
+        cell.classList.add(correct ? 'memory-lit' : 'memory-wrong');
+        setTimeout(() => cell.classList.remove('memory-lit', 'memory-wrong'), 300);
+        if (progressEl) progressEl.textContent = `${inputSeq.length} / ${seqLen}`;
+
+        if (!correct) {
+          phase = 'show';
+          overlay.querySelectorAll('.memory-cell').forEach(c => (c as HTMLButtonElement).disabled = true);
+          setTimeout(() => {
+            audioManager.playSE('roulette-fail');
+            if (!resultEl || !confirmBtn) return;
+            resultEl.innerHTML = `<div class="mg-failure">❌ ${pos + 1}番目が違う！失敗...<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+            confirmBtn.classList.remove('hidden');
+            confirmBtn.addEventListener('click', () => { overlay.remove(); callback(false); });
+          }, 400);
+          return;
+        }
+        if (inputSeq.length >= seqLen) {
+          phase = 'show';
+          overlay.querySelectorAll('.memory-cell').forEach(c => (c as HTMLButtonElement).disabled = true);
+          setTimeout(() => {
+            audioManager.playSE('roulette-success');
+            if (!resultEl || !confirmBtn) return;
+            resultEl.innerHTML = `<div class="mg-success">✅ 全部正解！完璧な記憶！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+            confirmBtn.classList.remove('hidden');
+            confirmBtn.addEventListener('click', () => { overlay.remove(); callback(true); });
+          }, 400);
+        }
+      });
+    });
+
+    showSequence();
+  }
+
+  // ========================================
+  // ミニゲーム⑧: 順番タップ（数字を小さい順に押せ）
+  // ========================================
+  private showOrderGame(option: EventOption, callback: (success: boolean) => void) {
+    const configs: Record<string, { count: number; time: number }> = {
+      low:    { count: 5, time: 7000 },
+      medium: { count: 8, time: 7000 },
+      high:   { count: 12, time: 8000 },
+    };
+    const crewBonus = getCrewEventBonus(this.state);
+    const conf = configs[option.risk] ?? { count: 8, time: 7000 };
+    const count = Math.max(3, Math.round(conf.count - crewBonus * 3));
+    const timeLimit = conf.time;
+
+    const positions: Array<{ x: number; y: number }> = [];
+    const numbers = Array.from({ length: count }, (_, i) => i + 1);
+    for (let i = 0; i < count; i++) {
+      let x: number, y: number, ok: boolean;
+      let tries = 0;
+      do {
+        x = 5 + Math.random() * 80;
+        y = 5 + Math.random() * 80;
+        ok = positions.every(p => Math.hypot(p.x - x, p.y - y) > 18);
+        tries++;
+      } while (!ok && tries < 50);
+      positions.push({ x, y });
+    }
+
+    const numHtml = numbers.map((n, i) =>
+      `<button class="order-num" id="on-${n}" data-num="${n}" style="left:${positions[i].x}%;top:${positions[i].y}%">${n}</button>`
+    ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'minigame-overlay';
+    overlay.innerHTML = `
+    <div class="minigame-modal">
+      <div class="mg-header">
+        <span class="mg-type-badge">🔢 順番タップ</span>
+        <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
+      </div>
+      <div class="mg-option-label">${option.label}</div>
+      <div class="mg-instruction">1 から ${count} まで順番に押せ！</div>
+      ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 数-${Math.round(crewBonus * 3)}</div>` : ''}
+      <div class="order-timer" id="order-timer">⏱ ${(timeLimit / 1000).toFixed(1)}s</div>
+      <div class="order-area">${numHtml}</div>
+      <div class="mg-result" id="mg-result"></div>
+      <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
+    </div>`;
+    document.body.appendChild(overlay);
+    audioManager.playSE('event');
+
+    const timerEl = document.getElementById('order-timer');
+    const resultEl = document.getElementById('mg-result');
+    const confirmBtn = document.getElementById('mg-confirm');
+
+    let nextExpected = 1;
+    let finished = false;
+    const startTime = Date.now();
+
+    const finish = (success: boolean) => {
+      if (finished) return;
+      finished = true;
+      cancelAnimationFrame(rafId);
+      overlay.querySelectorAll('.order-num').forEach(b => (b as HTMLButtonElement).disabled = true);
+      if (!resultEl || !confirmBtn) return;
+      if (success) {
+        audioManager.playSE('roulette-success');
+        resultEl.innerHTML = `<div class="mg-success">✅ 全部押した！<span class="mg-effect">${this.describeEffect(option.effect)}</span></div>`;
+      } else {
+        audioManager.playSE('roulette-fail');
+        resultEl.innerHTML = `<div class="mg-failure">❌ タイムオーバー！${nextExpected - 1}/${count}まで押した<span class="mg-effect">${this.describeEffect(option.failureEffect ?? option.effect)}</span></div>`;
+      }
+      confirmBtn.classList.remove('hidden');
+      confirmBtn.addEventListener('click', () => { overlay.remove(); callback(success); });
+    };
+
+    let rafId: number;
+    const tick = () => {
+      if (finished) return;
+      const remaining = Math.max(0, timeLimit - (Date.now() - startTime));
+      if (timerEl) timerEl.textContent = `⏱ ${(remaining / 1000).toFixed(1)}s`;
+      if (remaining <= 0) { finish(false); return; }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    overlay.querySelectorAll('.order-num').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (finished) return;
+        const n = parseInt((btn as HTMLElement).dataset.num ?? '0');
+        if (n !== nextExpected) {
+          btn.classList.add('order-wrong');
+          setTimeout(() => btn.classList.remove('order-wrong'), 300);
+          return;
+        }
+        (btn as HTMLButtonElement).disabled = true;
+        btn.classList.add('order-done');
+        nextExpected++;
+        if (nextExpected > count) finish(true);
+      });
     });
   }
 

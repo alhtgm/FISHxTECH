@@ -352,15 +352,8 @@ export function prepareOperation(state: GameState): GameState {
     return { ...state, scheduledEvents: [], currentEventIndex: 0 };
   }
 
-  // 通常イベント（ルーレットあり）: 1件
-  const regularTemplates = EVENT_TEMPLATES.filter(e => !e.isQuick);
-  const regularPick = pickRandomFromPool(regularTemplates, 1);
-
-  // クイック決断: 4件（操業中の動きを増やす）
-  const quickTemplates = EVENT_TEMPLATES.filter(e => e.isQuick === true);
-  const quickPick = pickRandomFromPool(quickTemplates, 4);
-
-  const allTemplates = [...regularPick, ...quickPick];
+  // 全イベントから5件をランダム選択（全件がミニゲーム付きで発生）
+  const allTemplates = pickRandomFromPool(EVENT_TEMPLATES, 5);
   const days = pickUniqueDays(allTemplates.length, 5, 26);
 
   const scheduled: ScheduledEvent[] = allTemplates.map((t, i) => ({
@@ -471,8 +464,8 @@ export function resolveEvent(state: GameState, option: EventOption, success: boo
 // クルー人件費計算
 // ----------------------------------------
 export function calcCrewSalary(c: import('./types').CrewMember): number {
-  const base = Math.max(220_000, Math.round(c.hireCost * 0.4));
-  return base + c.upgradeLevel * 60_000;
+  const base = Math.max(180_000, Math.round(c.hireCost * 0.35));
+  return base + c.upgradeLevel * 50_000;
 }
 
 export function finishMonth(state: GameState): GameState {
@@ -661,8 +654,10 @@ function calculateMonthResult(state: GameState): MonthResult {
   // アップグレードボーナス
   const purchasedUpgrades = state.upgrades.filter(u => u.purchased);
   const fuelReduction = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.fuelCostReduction || 0), 0);
+  const fixedCostReduction = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.fixedCostReduction || 0), 0);
   const priceVarianceReduction = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.priceVarianceReduction || 0), 0);
   const upgradeYieldBonus = purchasedUpgrades.reduce((acc, u) => acc + (u.effect.yieldBonus || 0), 0);
+  const upgradeAllPriceMult = purchasedUpgrades.reduce((acc, u) => acc * (u.effect.allPriceMultiplier || 1), 1);
 
   // アップグレードの漁法特化倍率（dive-1, dive-2 等）
   let upgradeMethodMult = 1;
@@ -723,7 +718,7 @@ function calculateMonthResult(state: GameState): MonthResult {
         upgradeFishPriceMult *= u.effect.fishPriceBonus.mult;
       }
     }
-    const unitPrice = Math.round(seasonalPrice * priceNoise * cardFx.allPriceMult * rarityMult * fishPriceMult * upgradeFishPriceMult);
+    const unitPrice = Math.round(seasonalPrice * priceNoise * cardFx.allPriceMult * rarityMult * fishPriceMult * upgradeFishPriceMult * upgradeAllPriceMult);
     const subtotal = quantity * unitPrice;
 
     catches.push({ fishId: fish.id, fishName: fish.name, quantity, unitPrice, subtotal });
@@ -735,7 +730,7 @@ function calculateMonthResult(state: GameState): MonthResult {
     dc.fuelCostPerUnit * area.distance * method.fuelMultiplier * (1 - fuelReduction)
     * cardFx.fuelMult * state.yearFuelMultiplier
   );
-  const fixedCost = Math.round(dc.fixedCostPerMonth * cardFx.fixedCostMult * state.yearFixedMultiplier);
+  const fixedCost = Math.round(dc.fixedCostPerMonth * cardFx.fixedCostMult * state.yearFixedMultiplier * (1 - fixedCostReduction));
   const interestCost = calcInterest(state);
 
   // カードの固定ボーナス（相場暴落など）

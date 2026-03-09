@@ -771,6 +771,96 @@ export const UPGRADES: Upgrade[] = [
     category: 'diving',
     requires: ['dive-1'],
   },
+  // ---- 情報系 Info 拡張 ----
+  {
+    id: 'info-3',
+    name: 'AI漁場予測システム',
+    description: '最新AIが潮流・水温・魚群を解析。全水揚げ量が15%アップ。',
+    cost: 2_200_000,
+    effect: { yieldBonus: 0.15 },
+    purchased: false,
+    unlockLevel: 4,
+    category: 'info',
+    requires: ['info-2'],
+  },
+  // ---- 市場 Market 拡張 ----
+  {
+    id: 'market-3',
+    name: '産地直送ECサイト',
+    description: '消費者への直販ルート確立。全魚種の販売価格+20%。評判+10。',
+    cost: 2_000_000,
+    effect: { allPriceMultiplier: 1.20, reputationBonus: 10 },
+    purchased: false,
+    unlockLevel: 4,
+    category: 'market',
+    requires: ['market-2'],
+  },
+  // ---- 船舶 Boat ----
+  {
+    id: 'boat-1',
+    name: '漁船改装',
+    description: '船倉を拡張・改良。水揚げ量が12%アップ。',
+    cost: 700_000,
+    effect: { yieldBonus: 0.12 },
+    purchased: false,
+    unlockLevel: 2,
+    category: 'boat',
+  },
+  {
+    id: 'boat-2',
+    name: '大型漁船導入',
+    description: 'より大きな漁船に乗り換え。水揚げ+25%、燃料効率UP（燃料費10%削減）。',
+    cost: 2_500_000,
+    effect: { yieldBonus: 0.25, fuelCostReduction: 0.10 },
+    purchased: false,
+    unlockLevel: 3,
+    category: 'boat',
+    requires: ['boat-1'],
+  },
+  {
+    id: 'boat-3',
+    name: '最新鋭漁船',
+    description: '石川県最高峰の設備を持つ最新鋭漁船。水揚げ+50%、固定費15%削減。',
+    cost: 5_000_000,
+    effect: { yieldBonus: 0.50, fixedCostReduction: 0.15 },
+    purchased: false,
+    unlockLevel: 5,
+    category: 'boat',
+    requires: ['boat-2'],
+  },
+  // ---- 安全 Safety ----
+  {
+    id: 'safety-1',
+    name: '緊急通信システム',
+    description: '最新の海上通信機器を導入。価格ブレを20%軽減し安定収益を確保。',
+    cost: 280_000,
+    effect: { priceVarianceReduction: 0.20 },
+    purchased: false,
+    unlockLevel: 1,
+    category: 'safety',
+  },
+  {
+    id: 'safety-2',
+    name: '救命設備強化',
+    description: '最新救命設備を搭載。悪天候・緊急時の損失を大幅軽減。固定費10%削減。',
+    cost: 700_000,
+    effect: { fixedCostReduction: 0.10, priceVarianceReduction: 0.15 },
+    purchased: false,
+    unlockLevel: 2,
+    category: 'safety',
+    requires: ['safety-1'],
+  },
+  {
+    id: 'safety-3',
+    name: '漁業保険フルパック',
+    description: '包括的な漁業保険に加入。価格変動リスクをさらに20%軽減。',
+    cost: 1_200_000,
+    effect: { priceVarianceReduction: 0.25, fixedCostReduction: 0.05 },
+    purchased: false,
+    unlockLevel: 3,
+    category: 'safety',
+    requires: ['safety-2'],
+  },
 ];
 
 // ----------------------------------------
@@ -1925,19 +2015,19 @@ export const GAME_CONFIG = {
   RUNNING_DURATION: 20,            // 月内進行時間（秒）
   MAX_EVENTS_PER_MONTH: 3,         // 月最大イベント数
   LEVEL_THRESHOLDS: [0, 2000000, 5000000, 10000000, 20000000], // レベル別累積利益
-  // --- 激ムズ固定パラメータ ---
-  initialMoney: 1_500_000,         // 初期資金150万
-  fixedCostPerMonth: 420_000,      // 月次固定費（42万）
-  fuelCostPerUnit: 180_000,        // 燃料基本費（激増）
-  interestRate: 0.15,              // 月利15%（借金地獄）
-  priceVariance: 0.50,             // 価格ブレ±50%（博打）
-  maxDebt: 500_000,                // 借金上限50万
-  debtRepayTurns: 1,               // 返済猶予1ターン
-  weatherSunny: 0.45,              // 晴れ確率45%
-  weatherCloudy: 0.35,             // 曇り確率35%（残り20%が嵐）
-  baseYieldMultiplier: 0.35,       // 水揚げ量-65%
+  // --- 難易度1.5倍調整済みパラメータ ---
+  initialMoney: 1_400_000,         // 初期資金140万（少なめ）
+  fixedCostPerMonth: 480_000,      // 月次固定費（48万、高め）
+  fuelCostPerUnit: 200_000,        // 燃料基本費（高め）
+  interestRate: 0.12,              // 月利12%（厳しめ）
+  priceVariance: 0.55,             // 価格ブレ±55%（不安定）
+  maxDebt: 700_000,                // 借金上限70万（余裕少なめ）
+  debtRepayTurns: 1,               // 返済猶予1ターン（厳しい）
+  weatherSunny: 0.40,              // 晴れ確率40%
+  weatherCloudy: 0.32,             // 曇り確率32%（残り28%が嵐）
+  baseYieldMultiplier: 0.32,       // 水揚げ量補正（厳しい）
   scoreMultiplier: 5.0,            // スコア倍率
-  restIncome: 0,                   // 休業しても収入ゼロ
+  restIncome: 80_000,              // 休業中の副収入8万（少なめ）
 };
 
 // ----------------------------------------
