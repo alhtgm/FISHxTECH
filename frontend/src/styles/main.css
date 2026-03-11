@@ -2154,12 +2154,17 @@ body::after {
    ======================================== */
 .growth-panel-body {
   display: flex; flex-direction: column;
-  overflow: hidden; padding: 0 !important;
+  overflow-y: auto; padding: 0 !important;
   min-height: 0; flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--px-cyan) var(--px-dark);
 }
+.growth-panel-body::-webkit-scrollbar { width: 9px; }
+.growth-panel-body::-webkit-scrollbar-track { background: var(--px-dark); }
+.growth-panel-body::-webkit-scrollbar-thumb { background: var(--px-cyan); }
 .growth-view {
   display: flex; flex-direction: column;
-  height: 100%; min-height: 0; overflow: hidden;
+  min-height: 0;
   padding: 12px;
 }
 .growth-unlock-banner {
@@ -2167,14 +2172,14 @@ body::after {
   border: 3px solid var(--px-gold);
   box-shadow: 3px 3px 0 var(--px-gold-dim);
   padding: 12px 15px; margin-bottom: 6px;
-  animation: levelUpPixel 0.3s steps(3);
 }
+.growth-unlock-banner--anim { animation: levelUpPixel 0.3s steps(3); }
 .growth-unlock-title {
   font-size: 12px; color: var(--px-gold);
   text-shadow: 1px 1px 0 var(--px-gold-dim);
   margin-bottom: 4px;
-  animation: pixelBlink 0.5s steps(1) infinite;
 }
+.growth-unlock-title--anim { animation: pixelBlink 0.5s steps(1) infinite; }
 .growth-summary-bar {
   display: flex; gap: 6px; margin-bottom: 6px;
 }
@@ -2214,9 +2219,6 @@ body::after {
   text-shadow: 1px 1px 0 var(--px-cyan-dim);
 }
 .growth-tab-content {
-  flex: 1; overflow-y: auto; min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--px-cyan) var(--px-dark);
   margin-bottom: 6px;
   padding-right: 2px;
 }
@@ -2519,7 +2521,6 @@ body::after {
   font-size: 15px;
   box-shadow: 0 5px 0 var(--px-red-dim), 0 6px 0 #000;
   cursor: pointer; letter-spacing: 2px;
-  animation: pixelBlink 0.5s steps(1) infinite;
 }
 .mg-stop-btn:hover   { background: #ff5577; }
 .mg-stop-btn:active  { transform: translateY(4px); box-shadow: 0 1px 0 var(--px-red-dim); }
@@ -2694,11 +2695,11 @@ body::after {
    記憶ゲーム
    ======================================== */
 .memory-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-  margin: 12px 0;
+  display: grid; grid-template-columns: repeat(3, 80px); gap: 12px;
+  margin: 16px auto; width: fit-content;
 }
 .memory-cell {
-  aspect-ratio: 1; background: var(--px-panel);
+  width: 80px; height: 80px; background: var(--px-panel);
   border: 3px solid var(--px-border); cursor: pointer;
   font-size: 0px;
   transition: background 0.1s;
@@ -2733,6 +2734,23 @@ body::after {
 .order-num.order-wrong { background: var(--px-red); animation: orderShake 0.2s steps(3); }
 @keyframes orderShake { 0%,100%{transform:translate(-50%,-50%)} 50%{transform:translate(calc(-50% + 4px),-50%)} }
 .order-timer { text-align: center; font-size: 16px; color: var(--px-gold); margin: 4px 0; }
+.order-next-hint {
+  text-align: center; font-size: 9px;
+  color: var(--px-text2); margin: 4px 0 8px;
+}
+.order-next-badge {
+  display: inline-block;
+  background: var(--px-gold); color: var(--px-dark);
+  padding: 2px 10px; margin-left: 6px;
+  font-size: 14px; font-family: var(--font-pixel);
+  box-shadow: 2px 2px 0 var(--px-gold-dim);
+}
+.order-num-next {
+  background: var(--px-gold) !important;
+  color: var(--px-dark) !important;
+  border-color: var(--px-gold) !important;
+  box-shadow: 0 0 0 3px var(--px-gold-dim) !important;
+}
 
 /* ========================================
    ユーティリティ
@@ -2792,4 +2810,180 @@ body::after {
 .result-profit, .breakdown-value,
 #running-timer-display {
   font-family: var(--font-pixel);
+}
+
+/* ========================================
+   石川漁港 ピクセルアートシーン
+   ======================================== */
+
+/* 判断フェーズ：センターパネル上部の漁港バナー */
+.harbor-banner {
+  flex-shrink: 0;
+  overflow: hidden;
+  border-bottom: 3px solid var(--px-border);
+  background: #08101e;
+  display: block;
+}
+.harbor-banner svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ========================================
+   今月のオプション（サービスボタン）
+   ======================================== */
+.service-row {
+  display: flex; gap: 8px; margin-bottom: 4px;
+}
+.service-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 10px 8px;
+  background: var(--px-dark);
+  border: 2px solid var(--px-border);
+  box-shadow: 3px 3px 0 #000;
+  cursor: pointer; color: var(--px-text);
+  font-family: var(--font-pixel); font-size: 9px;
+  transition: none; text-align: center;
+}
+.service-btn:hover:not(:disabled) {
+  border-color: var(--px-cyan);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #000;
+}
+.service-btn:active:not(:disabled) { transform: translate(1px,1px); box-shadow: 1px 1px 0 #000; }
+.service-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.service-btn.service-purchased {
+  border-color: var(--px-green);
+  background: rgba(0,255,136,0.08);
+  box-shadow: 3px 3px 0 var(--px-green-dim);
+  cursor: default;
+}
+.service-icon { font-size: 22px; }
+.service-cost { font-size: 8px; color: var(--px-gold); }
+.service-btn.service-purchased .service-cost { color: var(--px-green); }
+
+/* 操業中フェーズ：水平線に漁港が見える */
+.harbor-horizon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  z-index: 2;
+  overflow: hidden;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.harbor-horizon svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: bottom;
+}
+
+/* ========================================
+   魚ピクセルアートスプライト
+   ======================================== */
+
+/* DECISIONフェーズの魚チップ */
+.expected-fish-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 4px;
+  border: 2px solid var(--px-border);
+  background: var(--px-card);
+  cursor: default;
+  transition: transform 0.1s steps(1);
+}
+.expected-fish-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--px-cyan);
+  z-index: 10;
+}
+.expected-fish-chip.rare {
+  border-color: var(--px-gold);
+  background: rgba(255,204,0,0.08);
+}
+.expected-fish-chip.uncommon {
+  border-color: var(--px-purple);
+  background: rgba(200,136,255,0.06);
+}
+
+.fish-sprite-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+}
+.fish-chip-name {
+  font-size: 0.65rem;
+  color: var(--px-text);
+  white-space: nowrap;
+}
+.fish-chip-hot {
+  font-size: 0.55rem;
+  color: var(--px-gold);
+  background: rgba(255,204,0,0.15);
+  padding: 1px 4px;
+  border: 1px solid var(--px-gold);
+}
+
+/* RESULTフェーズの漁獲カード */
+.catch-sprite {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  min-width: 42px;
+}
+.catch-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ========================================
+   魚図鑑パネル（右パネル底部）
+   ======================================== */
+.fish-info-panel {
+  margin-top: 8px;
+  padding: 8px;
+  background: var(--px-dark);
+  border: 2px solid var(--px-border);
+}
+.fish-info-panel-title {
+  font-size: 0.6rem;
+  color: var(--px-cyan);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+.fish-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fish-gallery-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 2px solid transparent;
+  cursor: default;
+  transition: border-color 0.1s steps(1);
+}
+.fish-gallery-item:hover {
+  border-color: var(--px-cyan);
+  background: rgba(0,229,255,0.05);
+}
+.fish-gallery-item .fish-gallery-name {
+  font-size: 0.5rem;
+  color: var(--px-text2);
+  text-align: center;
+  max-width: 42px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -21,6 +21,7 @@ import {
 } from '../game/engine';
 import { FISHING_AREAS, FISHING_METHODS, FISH_SPECIES, CREW_MEMBERS, GAME_CONFIG } from '../game/data';
 import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard';
+import { getFishSprite, FISH_FLAVOR } from './fishSprites';
 
 // ========================================
 // カウントアップユーティリティ
@@ -132,6 +133,7 @@ export class App {
   private runningStartTime: number | null = null;
   private lastDay = 0;
   private bgmStarted = false;
+  private growthBannerShown = false;
 
   constructor(rootId: string) {
     this.root = document.getElementById(rootId)!;
@@ -610,6 +612,27 @@ export class App {
         ${isDecision ? '<div class="right-panel-hint">👇 下から選んでください</div>' : ''}
         <div class="section-title">🌊 海域</div>${areasHtml}
         <div class="section-title">⚙️ 漁法</div>${methodsHtml}
+        ${isDecision && selectedAreaId ? (() => {
+          const selArea = FISHING_AREAS.find(a => a.id === selectedAreaId);
+          const fishInArea = selArea ? FISH_SPECIES.filter(f =>
+            f.areas.includes(selectedAreaId) &&
+            (!selectedMethodId || f.methods.includes(selectedMethodId))
+          ) : [];
+          if (fishInArea.length === 0) return '';
+          const gallery = fishInArea.slice(0, 12).map(f => {
+            const sp = getFishSprite(f.id);
+            const seasonal = f.seasonality[this.state.month - 1];
+            const hotMark = seasonal >= 1.3 ? '🔥' : '';
+            return `<div class="fish-gallery-item" title="${FISH_FLAVOR[f.id] ?? f.name}">
+              ${sp}
+              <span class="fish-gallery-name">${hotMark}${f.name.split('（')[0]}</span>
+            </div>`;
+          }).join('');
+          return `<div class="fish-info-panel">
+            <div class="fish-info-panel-title">🐟 この海域で獲れる魚</div>
+            <div class="fish-gallery">${gallery}</div>
+          </div>`;
+        })() : ''}
         <div class="section-title">👨‍✈️ クルー ${crewCountLabel}</div>${crewHtml || '<div style="color:var(--text-muted);font-size:0.75rem;padding:4px">採用済みのクルーなし</div>'}
       </div>
     </div>`;
@@ -819,12 +842,11 @@ export class App {
     // 魚情報表示判定（info-1購入後に開示）
     const hasInfo1 = this.state.upgrades.find(u => u.id === 'info-1' && u.purchased);
     const hasInfo2 = this.state.upgrades.find(u => u.id === 'info-2' && u.purchased);
-    const hasForecast = this.state.monthlyServices.forecast;
 
     // 期待収益プレビュー
     let previewHtml = '';
     if (!isResting && area && method) {
-      const weatherForCalc = hasForecast ? currentWeather : 'cloudy'; // 予報なしは中間値
+      const weatherForCalc = currentWeather;
       const crewSalaryCost = this.state.crew.reduce((sum, c) => sum + calcCrewSalary(c), 0);
       const preview = calcExpectedProfit(area.id, method.id, month, weatherForCalc, fuelReduction, crewSalaryCost);
       const isStormy = currentWeather === 'stormy';
@@ -833,9 +855,12 @@ export class App {
         fishChips = preview.topFish.map((f, i) => {
           const seasonal = f.seasonality[month - 1];
           const isHot = seasonal >= 1.2 && hasInfo2;
-          return `<span class="expected-fish-chip ${f.rarity}" style="animation-delay:${i * 0.07}s">
-            ${isHot ? '🔥' : '🐟'} ${f.name}
-            ${isHot ? `<span style="font-size:0.6rem;color:var(--accent-gold)">旬！</span>` : ''}
+          const sprite = getFishSprite(f.id);
+          const flavor = FISH_FLAVOR[f.id] ?? '';
+          return `<span class="expected-fish-chip ${f.rarity}" style="animation-delay:${i * 0.07}s" title="${flavor}">
+            <span class="fish-sprite-wrap">${sprite}</span>
+            <span class="fish-chip-name">${f.name}</span>
+            ${isHot ? `<span class="fish-chip-hot">旬!</span>` : ''}
           </span>`;
         }).join('');
       } else {
@@ -843,7 +868,7 @@ export class App {
       }
       previewHtml = `
       <div class="profit-preview">
-        <div class="profit-preview-title">📊 期待収益プレビュー${!hasForecast ? ' <span style="font-size:0.65rem;color:var(--text-muted)">（天気予報なし・概算）</span>' : ''}</div>
+        <div class="profit-preview-title">📊 期待収益プレビュー</div>
         <div class="expected-fish-row">${fishChips}</div>
         <div class="profit-range">
           <div class="profit-range-item">
@@ -865,8 +890,8 @@ export class App {
             </div>
           </div>
         </div>
-        ${hasForecast && isStormy ? '<div class="weather-warning">⛈️ 荒天のため水揚げが大幅に減少します！</div>' : ''}
-        ${hasForecast ? `<div style="font-size:0.7rem;margin-top:4px;color:var(--accent-green)">📡 予報：${{ sunny: '☀️ 晴れ', cloudy: '☁️ くもり', stormy: '⛈️ 荒れ' }[currentWeather]}</div>` : ''}
+        ${isStormy ? '<div class="weather-warning">⛈️ 荒天のため水揚げが大幅に減少します！</div>' : ''}
+        <div style="font-size:0.7rem;margin-top:4px;color:var(--accent-green)">天気：${{ sunny: '☀️ 晴れ', cloudy: '☁️ くもり', stormy: '⛈️ 荒れ' }[currentWeather]}</div>
       </div>`;
     }
 
@@ -876,11 +901,6 @@ export class App {
     <div class="decision-section service-section">
       <div class="decision-section-title">🛒 今月のオプション</div>
       <div class="service-row">
-        <button id="btn-forecast" class="service-btn ${svc.forecast ? 'service-purchased' : ''}" ${svc.forecast || this.state.money < 100_000 ? 'disabled' : ''}>
-          <span class="service-icon">📡</span>
-          <span>天気予報</span>
-          <span class="service-cost">${svc.forecast ? '✓ 購入済' : '¥100,000'}</span>
-        </button>
         <button id="btn-insurance" class="service-btn ${svc.insurance ? 'service-purchased' : ''}" ${svc.insurance || this.state.money < 150_000 ? 'disabled' : ''}>
           <span class="service-icon">🛡️</span>
           <span>漁業保険</span>
@@ -888,7 +908,7 @@ export class App {
         </button>
       </div>
       <div style="font-size:0.65rem;color:var(--text-muted);margin-top:3px">
-        天気予報：天候を事前確認 ／ 漁業保険：赤字損失の30%補填
+        漁業保険：赤字損失の30%補填
       </div>
     </div>`;
 
@@ -962,17 +982,6 @@ export class App {
 
   private bindDecision() {
     // 消費型サービス購入
-    document.getElementById('btn-forecast')?.addEventListener('click', () => {
-      if (this.state.monthlyServices.forecast || this.state.money < 100_000) return;
-      audioManager.playSE('coin');
-      this.state = {
-        ...this.state,
-        money: this.state.money - 100_000,
-        monthlyServices: { ...this.state.monthlyServices, forecast: true },
-      };
-      this.refreshCenterPanel();
-      this.updateMoneyDisplay();
-    });
     document.getElementById('btn-insurance')?.addEventListener('click', () => {
       if (this.state.monthlyServices.insurance || this.state.money < 150_000) return;
       audioManager.playSE('coin');
@@ -1020,8 +1029,9 @@ export class App {
     const catchRows = r.catches.slice(0, 6).map((c, i) => {
       const fishData = FISH_SPECIES.find(f => f.id === c.fishId);
       const isRare = fishData?.rarity === 'rare';
-      return `<div class="catch-card ${isRare ? 'rare' : ''}" style="animation-delay:${i * 0.08}s">
-        <span style="font-size:1rem">${isRare ? '⭐' : '🐟'}</span>
+      const sprite = getFishSprite(c.fishId);
+      return `<div class="catch-card ${isRare ? 'rare' : ''}" style="animation-delay:${i * 0.08}s" title="${FISH_FLAVOR[c.fishId] ?? ''}">
+        <span class="catch-sprite">${sprite || (isRare ? '⭐' : '🐟')}</span>
         <span class="catch-fish-name">${c.fishName}</span>
         <span class="catch-qty">${c.quantity.toLocaleString()}kg</span>
         <span class="catch-price">@¥${c.unitPrice.toLocaleString()}</span>
@@ -1266,24 +1276,19 @@ export class App {
       audioManager.playSE('click');
       // 暗転なしで成長画面へ遷移（中央パネルのみ更新）
       this.state = checkGrowth(this.state);
+      this.growthBannerShown = false;
       audioManager.switchScene(this.getBGMScene('GROWTH'));
       this.refreshCenterPanel();
     });
   }
 
   // ---- 成長・解放 ----
-  private renderGrowth(): string {
-    const { level, unlockedAreas, unlockedMethods, upgrades, money, monthHistory, crew } = this.state;
-    const prevResult = monthHistory[monthHistory.length - 1];
-    // 今回レベルアップで初めて解放されたもの（Lv1初期解放は除外）
-    const newAreas = level > 1
-      ? unlockedAreas.filter(id => FISHING_AREAS.find(a => a.id === id)?.unlockLevel === level)
-      : [];
-    const newMethods = level > 1
-      ? unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level)
-      : [];
 
-    // スキルツリーUI（横一列ノード形式）
+  // タブ・ボタンなど購入で変わる動的部分だけ生成
+  private renderGrowthDynamic(): string {
+    const { level, upgrades, money, crew } = this.state;
+    const applicants = this.state.applicants;
+
     const categories: Array<{ key: string; label: string; icon: string }> = [
       { key: 'info', label: '情報', icon: '🔭' },
       { key: 'efficiency', label: '効率化', icon: '⚙️' },
@@ -1327,7 +1332,6 @@ export class App {
       </div>`;
     }).join('');
 
-    // 雇用済みクルー管理UI
     const hiredCrewHtml = crew.map(c => {
       const bond = this.state.bondLevels[c.id] ?? 0;
       const bondHearts = '♥'.repeat(bond) + '♡'.repeat(5 - bond);
@@ -1354,8 +1358,6 @@ export class App {
       </div>`;
     }).join('');
 
-    // 今月の応募者UI
-    const applicants = this.state.applicants;
     const applicantsHtml = applicants.length === 0
       ? '<div style="color:var(--text-muted);font-size:0.75rem;padding:6px">今月の応募者はいません</div>'
       : applicants.map(c => {
@@ -1383,6 +1385,45 @@ export class App {
           </div>`;
         }).join('');
 
+    return `
+      <div class="growth-tabs">
+        <button class="growth-tab active" data-tab="skill">⚡ スキル</button>
+        <button class="growth-tab" data-tab="crew">👥 クルー(${crew.length})</button>
+        <button class="growth-tab" data-tab="recruit">📋 採用(${applicants.length})</button>
+      </div>
+
+      <div class="growth-tab-content" id="growth-tab-skill">
+        <div class="skill-tree-container">${skillTreeHtml}</div>
+      </div>
+
+      <div class="growth-tab-content hidden" id="growth-tab-crew">
+        ${crew.length === 0
+          ? '<div class="growth-empty">クルーがいません</div>'
+          : `<div class="crew-manage-grid">${hiredCrewHtml}</div>`
+        }
+      </div>
+
+      <div class="growth-tab-content hidden" id="growth-tab-recruit">
+        ${applicants.length === 0
+          ? '<div class="growth-empty">今月の応募者はいません</div>'
+          : `<div class="crew-manage-grid">${applicantsHtml}</div>`
+        }
+      </div>
+
+      <button id="next-month-btn" class="next-btn growth-next-btn">
+        ${this.state.month >= 12 ? '★ ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
+      </button>`;
+  }
+
+  private renderGrowth(): string {
+    const { level, unlockedAreas, unlockedMethods, monthHistory } = this.state;
+    const prevResult = monthHistory[monthHistory.length - 1];
+    const newAreas = level > 1
+      ? unlockedAreas.filter(id => FISHING_AREAS.find(a => a.id === id)?.unlockLevel === level)
+      : [];
+    const newMethods = level > 1
+      ? unlockedMethods.filter(id => FISHING_METHODS.find(m => m.id === id)?.unlockLevel === level)
+      : [];
     const hasUnlocks = (newAreas.length + newMethods.length) > 0;
 
     return `
@@ -1390,14 +1431,16 @@ export class App {
     <div class="panel-body growth-panel-body">
       <div class="growth-view">
 
-        ${hasUnlocks ? `
-        <div class="growth-unlock-banner">
-          <div class="growth-unlock-title">★ 新要素解放！</div>
-          <div class="unlock-list">
-            ${newAreas.map(id => { const a = FISHING_AREAS.find(a => a.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${a.icon}</span>海域「${a.name}」解放！</div>`; }).join('')}
-            ${newMethods.map(id => { const m = FISHING_METHODS.find(m => m.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${m.icon}</span>漁法「${m.name}」解放！</div>`; }).join('')}
-          </div>
-        </div>` : ''}
+        <div id="growth-banner-slot">
+          ${hasUnlocks && !this.growthBannerShown ? `
+          <div class="growth-unlock-banner growth-unlock-banner--anim">
+            <div class="growth-unlock-title growth-unlock-title--anim">★ 新要素解放！</div>
+            <div class="unlock-list">
+              ${newAreas.map(id => { const a = FISHING_AREAS.find(a => a.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${a.icon}</span>海域「${a.name}」解放！</div>`; }).join('')}
+              ${newMethods.map(id => { const m = FISHING_METHODS.find(m => m.id === id)!; return `<div class="unlock-item"><span class="unlock-icon">${m.icon}</span>漁法「${m.name}」解放！</div>`; }).join('')}
+            </div>
+          </div>` : ''}
+        </div>
 
         ${prevResult && !prevResult.isResting ? `
         <div class="growth-summary-bar">
@@ -1415,48 +1458,33 @@ export class App {
           </div>
         </div>` : ''}
 
-        <div class="growth-tabs">
-          <button class="growth-tab active" data-tab="skill">⚡ スキル</button>
-          <button class="growth-tab" data-tab="crew">👥 クルー(${crew.length})</button>
-          <button class="growth-tab" data-tab="recruit">📋 採用(${applicants.length})</button>
+        <div id="growth-dynamic">
+          ${this.renderGrowthDynamic()}
         </div>
-
-        <div class="growth-tab-content" id="growth-tab-skill">
-          <div class="skill-tree-container">${skillTreeHtml}</div>
-        </div>
-
-        <div class="growth-tab-content hidden" id="growth-tab-crew">
-          ${crew.length === 0
-            ? '<div class="growth-empty">クルーがいません</div>'
-            : `<div class="crew-manage-grid">${hiredCrewHtml}</div>`
-          }
-        </div>
-
-        <div class="growth-tab-content hidden" id="growth-tab-recruit">
-          ${applicants.length === 0
-            ? '<div class="growth-empty">今月の応募者はいません</div>'
-            : `<div class="crew-manage-grid">${applicantsHtml}</div>`
-          }
-        </div>
-
-        <button id="next-month-btn" class="next-btn growth-next-btn">
-          ${this.state.month >= 12 ? '★ ゲーム終了へ' : `${this.state.month + 1}月へ進む →`}
-        </button>
       </div>
     </div>`;
   }
 
-  // タブを保持したままGROWH画面を再描画するヘルパー
+  // タブを保持したままGROWTH画面を再描画するヘルパー
+  // バナーは #growth-banner-slot に固定されDOMを動かさないため再アニメーションしない
   private refreshGrowthPanel() {
+    this.growthBannerShown = true;
     const activeTabEl = document.querySelector('.growth-tab.active') as HTMLElement | null;
     const activeTab = activeTabEl?.dataset.tab ?? 'skill';
-    this.refreshCenterPanel();
-    // タブ状態を復元
-    document.querySelectorAll('.growth-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.growth-tab-content').forEach(c => (c as HTMLElement).classList.add('hidden'));
-    const tab = document.querySelector(`.growth-tab[data-tab="${activeTab}"]`);
-    tab?.classList.add('active');
-    document.getElementById(`growth-tab-${activeTab}`)?.classList.remove('hidden');
+
+    const dynamic = document.getElementById('growth-dynamic');
+    if (dynamic) {
+      dynamic.innerHTML = this.renderGrowthDynamic();
+      // タブ状態を復元
+      document.querySelectorAll('.growth-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.growth-tab-content').forEach(c => (c as HTMLElement).classList.add('hidden'));
+      document.querySelector(`.growth-tab[data-tab="${activeTab}"]`)?.classList.add('active');
+      document.getElementById(`growth-tab-${activeTab}`)?.classList.remove('hidden');
+      this.bindGrowth();
+    } else {
+      // フォールバック（通常は不要）
+      this.refreshCenterPanel();
+    }
   }
 
   private bindGrowth() {
@@ -2125,10 +2153,10 @@ export class App {
   // ミニゲーム⑤: 連打ゲーム
   // ========================================
   private showMashGame(option: EventOption, callback: (success: boolean) => void) {
-    const requiredClicks: Record<string, number> = { low: 20, medium: 32, high: 45 };
+    const requiredClicks: Record<string, number> = { low: 12, medium: 20, high: 30 };
     const crewBonus = getCrewEventBonus(this.state);
-    const target = Math.max(5, Math.round((requiredClicks[option.risk] ?? 32) - crewBonus * 12));
-    const timeLimit = 2500; // 2.5秒
+    const target = Math.max(5, Math.round((requiredClicks[option.risk] ?? 20) - crewBonus * 8));
+    const timeLimit = 3500; // 3.5秒
 
     const overlay = document.createElement('div');
     overlay.className = 'minigame-overlay';
@@ -2139,11 +2167,11 @@ export class App {
         <span class="risk-badge ${option.risk}">${{ low: '低リスク', medium: '中リスク', high: '⚠️高リスク' }[option.risk]}</span>
       </div>
       <div class="mg-option-label">${option.label}</div>
-      <div class="mg-instruction">2.5秒以内に ${target} 回ボタンを押せ！</div>
+      <div class="mg-instruction">3.5秒以内に ${target} 回ボタンを押せ！</div>
       <div class="mash-progress">
         <div class="mash-count" id="mash-count">0 / ${target}</div>
         <div class="mash-bar-wrap"><div class="mash-bar" id="mash-bar" style="width:0%"></div></div>
-        <div class="mash-timer" id="mash-timer">⏱ 2.5s</div>
+        <div class="mash-timer" id="mash-timer">⏱ 3.5s</div>
       </div>
       ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 目標-${Math.round(crewBonus * 12)}回</div>` : ''}
       <button class="mash-btn" id="mash-btn">👊 叩く！</button>
@@ -2216,7 +2244,7 @@ export class App {
     const crewBonus = getCrewEventBonus(this.state);
     const totalBoxes = boxCounts[option.risk] ?? 4;
     // クルーボーナスで正解箱を増やす（最低1箱）
-    const winBoxes = Math.min(totalBoxes - 1, Math.max(1, Math.round(1 + crewBonus * totalBoxes)));
+    const winBoxes = Math.min(totalBoxes - 1, Math.max(2, Math.round(2 + crewBonus * totalBoxes)));
     const winSet = new Set<number>();
     while (winSet.size < winBoxes) winSet.add(Math.floor(Math.random() * totalBoxes));
 
@@ -2424,6 +2452,7 @@ export class App {
       <div class="mg-instruction">1 から ${count} まで順番に押せ！</div>
       ${crewBonus !== 0 ? `<div class="mg-crew-bonus-row ${crewBonus > 0 ? 'pos' : 'neg'}">クルー補正 数-${Math.round(crewBonus * 3)}</div>` : ''}
       <div class="order-timer" id="order-timer">⏱ ${(timeLimit / 1000).toFixed(1)}s</div>
+      <div class="order-next-hint">次に押す: <span class="order-next-badge" id="order-next-val">1</span></div>
       <div class="order-area">${numHtml}</div>
       <div class="mg-result" id="mg-result"></div>
       <button class="mg-confirm-btn hidden" id="mg-confirm">続ける →</button>
@@ -2466,6 +2495,15 @@ export class App {
     };
     rafId = requestAnimationFrame(tick);
 
+    const highlightNext = () => {
+      overlay.querySelectorAll('.order-num').forEach(b => b.classList.remove('order-num-next'));
+      const nextBtn = overlay.querySelector(`.order-num[data-num="${nextExpected}"]`);
+      nextBtn?.classList.add('order-num-next');
+      const hintEl = document.getElementById('order-next-val');
+      if (hintEl) hintEl.textContent = String(nextExpected);
+    };
+    highlightNext();
+
     overlay.querySelectorAll('.order-num').forEach(btn => {
       btn.addEventListener('click', () => {
         if (finished) return;
@@ -2478,7 +2516,11 @@ export class App {
         (btn as HTMLButtonElement).disabled = true;
         btn.classList.add('order-done');
         nextExpected++;
-        if (nextExpected > count) finish(true);
+        if (nextExpected > count) {
+          finish(true);
+        } else {
+          highlightNext();
+        }
       });
     });
   }

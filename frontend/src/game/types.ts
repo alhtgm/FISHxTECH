@@ -157,7 +157,7 @@ export interface EventTemplate {
   applicableMethods?: string[];
   options: EventOption[];
   isQuick?: boolean;
-  mechanic?: 'reaction' | 'gauge' | 'card' | 'dice' | 'mash' | 'guess' | 'memory' | 'order'; // ミニゲーム種類
+  mechanic?: 'reaction' | 'gauge' | 'card' | 'dice' | 'mash' | 'guess' | 'memory' | 'order' | 'roulette'; // ミニゲーム種類
 }
 
 export interface EventOption {
