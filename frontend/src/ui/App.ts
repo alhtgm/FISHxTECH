@@ -24,6 +24,13 @@ import { submitScore, getLeaderboard, type ScoreEntry } from '../api/leaderboard
 import { getFishSprite, FISH_FLAVOR } from './fishSprites';
 
 // ========================================
+// HTML エスケープユーティリティ（XSS防止）
+// ========================================
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ========================================
 // カウントアップユーティリティ
 // ========================================
 function countUp(el: HTMLElement, target: number, duration = 800, prefix = '¥') {
@@ -450,7 +457,7 @@ export class App {
     const phaseMsg = this.getPhaseMessage(phase);
     return `
     <div id="header">
-      <span class="company-name">🏢 ${companyName}</span>
+      <span class="company-name">🏢 ${escHtml(companyName)}</span>
       <span class="month-display">${month}月</span>
       <span class="status-message">${phaseMsg}</span>
       <span class="weather-display">${weatherIcon}</span>
@@ -1628,7 +1635,7 @@ export class App {
 
       <!-- ヘッダーバー -->
       <div class="running-header-bar">
-        <span class="running-company">🏢 ${companyName}</span>
+        <span class="running-company">🏢 ${escHtml(companyName)}</span>
         <span class="running-month">${month}月 操業中</span>
         <span class="running-weather-badge">${weatherIcon}</span>
         ${area ? `<span style="font-size:0.8rem;color:var(--text-secondary)">${area.icon} ${area.name}</span>` : ''}
@@ -2551,7 +2558,7 @@ export class App {
     <div class="end-modal">
       <div class="result-box">
         <h2>🏁 12か月終了</h2>
-        <div style="font-size:0.85rem;color:var(--text-muted)">${companyName}</div>
+        <div style="font-size:0.85rem;color:var(--text-muted)">${escHtml(companyName)}</div>
         <div class="final-score" id="final-score-display">0 pt</div>
         <div class="score-breakdown">
           <div class="score-row"><span>総利益</span><span class="${totalProfit >= 0 ? 'text-green' : 'text-red'}">¥${totalProfit.toLocaleString()}</span></div>
@@ -2752,7 +2759,7 @@ export class App {
       const isMe = i === myIdx;
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
       const diffLabel = r.difficulty === 'extreme' ? '☠️激ムズ' : r.difficulty === 'hard' ? 'ハード' : 'ノーマル';
-      return `<tr ${isMe ? 'class="my-rank"' : ''}><td>${medal}</td><td>${r.companyName}${isMe ? ' 👈' : ''}</td><td>${r.score.toLocaleString()}</td><td>${diffLabel}</td><td>Lv.${r.level}</td></tr>`;
+      return `<tr ${isMe ? 'class="my-rank"' : ''}><td>${medal}</td><td>${escHtml(r.companyName)}${isMe ? ' 👈' : ''}</td><td>${r.score.toLocaleString()}</td><td>${diffLabel}</td><td>Lv.${r.level}</td></tr>`;
     }).join('');
     rankingSection.innerHTML = `
     <div style="font-size:0.85rem;font-weight:700;margin:12px 0 6px;color:var(--accent-primary)">
