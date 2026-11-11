@@ -74,5 +74,4 @@ backend/
 
 ## チーム
 
-チーム「寒いぜ石川」（4人、金沢工業大学 Data Dreamers）
-後藤聖翔（[@alhtgm](https://github.com/alhtgm)）：リーダー。企画・実装・データ分析・発表を担当
+チーム「寒いぜ石川」（金沢工業大学 Data Dreamers の4人）で、Fish×Techハッカソンに向けて約2か月かけて開発しました。
